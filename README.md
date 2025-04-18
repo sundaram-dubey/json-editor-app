@@ -1,6 +1,12 @@
-# Swiggy JSON Editor
+# JSON Editor
 
 A desktop application for editing and validating JSON files with tree view and schema validation.
+
+<img width="1728" alt="Screenshot 2025-04-18 at 22 22 07" src="https://github.com/user-attachments/assets/38417a86-1112-4ed5-ab23-bf2afff363e8" />
+<img width="1722" alt="Screenshot 2025-04-18 at 22 21 59" src="https://github.com/user-attachments/assets/b6f5651a-b381-4e6d-a6b0-f1f797a447b8" />
+<img width="1728" alt="Screenshot 2025-04-18 at 22 21 50" src="https://github.com/user-attachments/assets/abddf08c-148d-4440-9663-adbea01be260" />
+<img width="1725" alt="Screenshot 2025-04-18 at 22 21 42" src="https://github.com/user-attachments/assets/968636cf-5c0c-4108-9bee-5909c3e06109" />
+
 
 ## Features
 

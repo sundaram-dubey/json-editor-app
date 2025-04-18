@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="512" height="512" rx="80" fill="#FC8019"/>
+  
+  <!-- JSON Bracket Design -->
+  <path d="M120 120C120 110 125 100 140 100C155 100 165 110 165 120V160C165 180 185 190 200 190H120V230H200C185 230 165 240 165 260V392C165 402 155 412 140 412C125 412 120 402 120 392V120Z" fill="white"/>
+  
+  <path d="M392 120C392 110 387 100 372 100C357 100 347 110 347 120V160C347 180 327 190 312 190H392V230H312C327 230 347 240 347 260V392C347 402 357 412 372 412C387 412 392 402 392 392V120Z" fill="white"/>
+  
+  <!-- Content Lines -->
+  <rect x="200" y="150" width="112" height="20" rx="10" fill="white"/>
+  <rect x="200" y="200" width="80" height="20" rx="10" fill="white"/>
+  <rect x="200" y="250" width="112" height="20" rx="10" fill="white"/>
+  <rect x="200" y="300" width="60" height="20" rx="10" fill="white"/>
+  <rect x="200" y="350" width="90" height="20" rx="10" fill="white"/>
+</svg> 

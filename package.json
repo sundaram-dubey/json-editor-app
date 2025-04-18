@@ -1,0 +1,48 @@
+{
+  "name": "json-editor-app",
+  "version": "1.0.0",
+  "description": "A desktop JSON editor application for macOS",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder",
+    "build-icons": "./build-icons.sh",
+    "package": "npm run build-icons && electron-builder --mac"
+  },
+  "keywords": [
+    "json",
+    "editor",
+    "tree-view",
+    "validation",
+    "compression",
+    "electron",
+    "desktop",
+    "macos"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^25.2.0",
+    "electron-builder": "^24.4.0"
+  },
+  "dependencies": {
+    "ace-builds": "^1.23.4",
+    "jsonlint": "^1.6.3",
+    "jsonpath": "^1.1.1",
+    "jsonschema": "^1.4.1"
+  },
+  "build": {
+    "appId": "com.swiggy.jsoneditor",
+    "productName": "Swiggy JSON Editor",
+    "icon": "build/icons/icon.png",
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "darkModeSupport": true,
+      "icon": "build/icons/icon.png"
+    }
+  }
+} 

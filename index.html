@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline';">
+  <title>Swiggy JSON Editor</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
+  <link rel="icon" type="image/png" href="build/icons/icon.png">
+</head>
+<body>
+  <div class="app-container">
+    <div class="toolbar">
+      <div class="app-logo">
+        <span class="app-name">Swiggy JSON Editor</span>
+      </div>
+      <div class="toolbar-actions">
+        <button id="btnNew" class="btn" title="New (Cmd+N)">
+          <i class="fas fa-file"></i> New
+        </button>
+        <button id="btnOpen" class="btn" title="Open (Cmd+O)">
+          <i class="fas fa-folder-open"></i> Open
+        </button>
+        <button id="btnSave" class="btn" title="Save (Cmd+S)">
+          <i class="fas fa-save"></i> Save
+        </button>
+        <div class="btn-divider"></div>
+        <button id="btnFormat" class="btn" title="Format JSON (Cmd+Shift+F)">
+          <i class="fas fa-indent"></i> Format
+        </button>
+        <button id="btnCompress" class="btn" title="Compress JSON (Cmd+Shift+C)">
+          <i class="fas fa-compress-alt"></i> Compress
+        </button>
+        <button id="btnValidate" class="btn" title="Validate JSON (Cmd+Shift+V)">
+          <i class="fas fa-check-circle"></i> Validate
+        </button>
+        <div class="btn-divider"></div>
+        <button id="btnTreeView" class="btn" title="Toggle Tree View (Cmd+T)">
+          <i class="fas fa-sitemap"></i> Tree View
+        </button>
+        <button id="btnFind" class="btn" title="Find (Cmd+F)">
+          <i class="fas fa-search"></i> Find
+        </button>
+      </div>
+    </div>
+
+    <!-- Search Bar -->
+    <div id="searchContainer" class="search-container hidden">
+      <input type="text" id="searchInput" placeholder="Search by key, value, or path...">
+      <div class="search-options">
+        <label><input type="checkbox" id="searchCaseSensitive"> Case sensitive</label>
+        <label><input type="checkbox" id="searchRegex"> Regex</label>
+        <span id="searchResultsCount">0 results</span>
+      </div>
+      <div class="search-controls">
+        <button id="btnPrevMatch" class="btn btn-sm" title="Previous Match">
+          <i class="fas fa-chevron-up"></i>
+        </button>
+        <button id="btnNextMatch" class="btn btn-sm" title="Next Match">
+          <i class="fas fa-chevron-down"></i>
+        </button>
+        <button id="btnCloseSearch" class="btn btn-sm" title="Close Search">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+    </div>
+
+    <div class="main-content">
+      <div id="editor-container" class="panel">
+        <div id="editor"></div>
+      </div>
+      
+      <!-- Resizable Divider -->
+      <div id="divider" class="divider"></div>
+      
+      <div id="tree-container" class="panel hidden">
+        <div class="tree-toolbar">
+          <button id="btnExpandAll" class="btn btn-sm" title="Expand All (Cmd+])">
+            <i class="fas fa-expand-alt"></i> Expand All
+          </button>
+          <button id="btnCollapseAll" class="btn btn-sm" title="Collapse All (Cmd+[)">
+            <i class="fas fa-compress-alt"></i> Collapse All
+          </button>
+          <button id="btnCopyPath" class="btn btn-sm" title="Copy Path">
+            <i class="fas fa-clipboard"></i> Copy Path
+          </button>
+        </div>
+        <div id="json-tree"></div>
+      </div>
+    </div>
+
+    <div id="status-bar" class="status-bar">
+      <div id="validation-status" class="status-item">Ready</div>
+      <div id="cursor-position" class="status-item">Line: 1, Column: 1</div>
+      <div id="file-info" class="status-item">No file loaded</div>
+      <div id="schema-info" class="status-item">No schema loaded</div>
+    </div>
+  </div>
+
+  <!-- Modals -->
+  <!-- Validation Results Modal -->
+  <div id="validationModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2><i class="fas fa-check-circle"></i> Validation Results</h2>
+        <span class="close" data-modal="validationModal">&times;</span>
+      </div>
+      <div class="modal-body">
+        <pre id="validationResults"></pre>
+      </div>
+    </div>
+  </div>
+
+  <!-- URL Import Modal -->
+  <div id="urlImportModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2><i class="fas fa-cloud-download-alt"></i> Import JSON from URL</h2>
+        <span class="close" data-modal="urlImportModal">&times;</span>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="urlInput">Enter URL:</label>
+          <input type="url" id="urlInput" placeholder="https://example.com/data.json" class="form-control">
+        </div>
+        <div class="modal-footer">
+          <button id="btnImportUrl" class="btn btn-primary">Import</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Schema Validation Modal -->
+  <div id="schemaModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2><i class="fas fa-file-code"></i> Schema Validation</h2>
+        <span class="close" data-modal="schemaModal">&times;</span>
+      </div>
+      <div class="modal-body">
+        <pre id="schemaResults"></pre>
+      </div>
+    </div>
+  </div>
+
+  <!-- Keyboard Shortcuts Modal -->
+  <div id="shortcutsModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2><i class="fas fa-keyboard"></i> Keyboard Shortcuts</h2>
+        <span class="close" data-modal="shortcutsModal">&times;</span>
+      </div>
+      <div class="modal-body">
+        <table class="shortcuts-table">
+          <thead>
+            <tr>
+              <th>Action</th>
+              <th>Shortcut</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>New</td><td>⌘N</td></tr>
+            <tr><td>Open</td><td>⌘O</td></tr>
+            <tr><td>Save</td><td>⌘S</td></tr>
+            <tr><td>Save As</td><td>⌘⇧S</td></tr>
+            <tr><td>Format JSON</td><td>⌘⇧F</td></tr>
+            <tr><td>Compress JSON</td><td>⌘⇧C</td></tr>
+            <tr><td>Validate JSON</td><td>⌘⇧V</td></tr>
+            <tr><td>Find</td><td>⌘F</td></tr>
+            <tr><td>Toggle Tree View</td><td>⌘T</td></tr>
+            <tr><td>Expand All</td><td>⌘]</td></tr>
+            <tr><td>Collapse All</td><td>⌘[</td></tr>
+            <tr><td>Import from URL</td><td>⌘I</td></tr>
+            <tr><td>Import from Clipboard</td><td>⌘⇧I</td></tr>
+            <tr><td>Export to Clipboard</td><td>⌘⇧E</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Load ACE editor -->
+  <script src="node_modules/ace-builds/src-min/ace.js"></script>
+  <script src="node_modules/ace-builds/src-min/mode-json.js"></script>
+  <script src="node_modules/ace-builds/src-min/theme-textmate.js"></script>
+  <script src="node_modules/ace-builds/src-min/ext-language_tools.js"></script>
+  <script src="node_modules/ace-builds/src-min/ext-searchbox.js"></script>
+  <script src="renderer.js"></script>
+</body>
+</html> 

@@ -1265,6 +1265,25 @@ function findDifferences(objA, objB, path = '', diffs = []) {
 // Show JSON Compare dialog
 function showCompare() {
   openModal('compareModal');
+  
+  // Resize the compare editors when the modal is opened
+  if (compareEditorA && compareEditorB) {
+    compareEditorA.resize();
+    compareEditorB.resize();
+  }
+  
+  // Set up resize observer for the modal content
+  const modalContent = document.querySelector('#compareModal .modal-content');
+  if (modalContent && !modalContent._resizeObserverAttached) {
+    const resizeObserver = new ResizeObserver(() => {
+      if (compareEditorA && compareEditorB) {
+        compareEditorA.resize();
+        compareEditorB.resize();
+      }
+    });
+    resizeObserver.observe(modalContent);
+    modalContent._resizeObserverAttached = true;
+  }
 }
 
 // Setup keyboard shortcuts
@@ -1480,6 +1499,14 @@ async function openSingleFile() {
       currentFilePath = filePath;
       updateFileInfo(filePath);
       hasUnsavedChanges = false;
+      
+      // Update file explorer if visible
+      if (isFileExplorerVisible && currentFolderPath) {
+        // Check if opened file is in current folder
+        if (filePath.startsWith(currentFolderPath)) {
+          refreshFolderInSidebar();
+        }
+      }
     }
   } catch (err) {
     updateStatus('Error opening file: ' + err.message, 'error');

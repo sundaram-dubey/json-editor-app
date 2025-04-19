@@ -1246,4 +1246,95 @@ body {
   align-items: center;
   gap: 5px;
   font-weight: normal;
+}
+
+/* Enhanced markdown and search results styling */
+.md-hr {
+  border: 0;
+  height: 1px;
+  background-image: linear-gradient(to right, rgba(0, 0, 0, 0), rgba(252, 128, 25, 0.5), rgba(0, 0, 0, 0));
+  margin: 20px 0;
+}
+
+.ai-result h1, 
+.ai-result h2, 
+.ai-result h3 {
+  color: var(--swiggy-orange-dark);
+  margin-top: 1em;
+  margin-bottom: 0.5em;
+  font-weight: 600;
+}
+
+.ai-result h1 {
+  font-size: 1.5em;
+  border-bottom: 1px solid var(--swiggy-gray-light);
+  padding-bottom: 5px;
+}
+
+.ai-result h2 {
+  font-size: 1.3em;
+}
+
+.ai-result h3 {
+  font-size: 1.1em;
+}
+
+.ai-result p {
+  margin-bottom: 1em;
+  line-height: 1.5;
+}
+
+.ai-result ul, 
+.ai-result ol {
+  margin-left: 1.5em;
+  margin-bottom: 1em;
+}
+
+.ai-result li {
+  margin-bottom: 0.5em;
+}
+
+.ai-result code {
+  background-color: rgba(0, 0, 0, 0.05);
+  border-radius: 3px;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
+  padding: 2px 4px;
+  font-size: 0.9em;
+}
+
+.ai-result pre {
+  background-color: rgba(0, 0, 0, 0.05);
+  border-radius: 5px;
+  padding: 10px;
+  overflow-x: auto;
+  margin-bottom: 1em;
+}
+
+.ai-result pre code {
+  background-color: transparent;
+  padding: 0;
+  border-radius: 0;
+}
+
+/* Search results specific styling */
+.search-result-label {
+  font-weight: 600;
+  color: var(--swiggy-orange-dark);
+  margin-top: 10px;
+  margin-bottom: 4px;
+  font-size: 0.9em;
+}
+
+.search-result-value {
+  background-color: white;
+  border-radius: 4px;
+  padding: 8px 12px;
+  margin-bottom: 10px;
+  border-left: 3px solid var(--swiggy-orange);
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
+  word-break: break-word;
+}
+
+.ai-result h3 + .search-result-label {
+  margin-top: 15px;
 } 

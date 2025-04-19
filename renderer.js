@@ -2114,29 +2114,103 @@ function escapeHtml(unsafe) {
 // Initialize marked library for Markdown parsing
 const marked = {
   parse: function(text) {
-    // Simple Markdown parser implementation
-    return text
-      // Headers
-      .replace(/^### (.*$)/gim, '<h3>$1</h3>')
-      .replace(/^## (.*$)/gim, '<h2>$1</h2>')
-      .replace(/^# (.*$)/gim, '<h1>$1</h1>')
-      // Bold
-      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-      // Italic
-      .replace(/\*(.*?)\*/g, '<em>$1</em>')
-      // Code blocks
-      .replace(/```([\s\S]*?)```/g, (match, p1) => `<pre><code>${escapeHtml(p1.trim())}</code></pre>`)
-      // Inline code
-      .replace(/`([^`]+)`/g, '<code>$1</code>')
-      // Lists
-      .replace(/^\s*\d+\.\s+(.*$)/gim, '<ol><li>$1</li></ol>')
-      .replace(/^\s*[\-*]\s+(.*$)/gim, '<ul><li>$1</li></ul>')
-      // Paragraphs
-      .replace(/^(?!<[oluh])(.+)(?=\n|$)/gim, '<p>$1</p>')
-      // Fix nested lists
-      .replace(/<\/[ou]l>\n<[ou]l>/g, '')
-      // Fix newlines
-      .replace(/\n/g, '');
+    if (!text) return '';
+    
+    // Process the text in chunks to handle block elements properly
+    const lines = text.split('\n');
+    let inCodeBlock = false;
+    let codeContent = '';
+    let result = '';
+    
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      
+      // Handle code blocks
+      if (line.trim().startsWith('```')) {
+        if (!inCodeBlock) {
+          inCodeBlock = true;
+          codeContent = '';
+        } else {
+          result += `<pre><code>${escapeHtml(codeContent)}</code></pre>`;
+          inCodeBlock = false;
+        }
+        continue;
+      }
+      
+      if (inCodeBlock) {
+        codeContent += line + '\n';
+        continue;
+      }
+      
+      // Handle horizontal rules
+      if (line.trim().match(/^---+$/)) {
+        result += '<hr class="md-hr">';
+        continue;
+      }
+      
+      // Handle headers
+      let processedLine = line
+        .replace(/^### (.*$)/gm, '<h3>$1</h3>')
+        .replace(/^## (.*$)/gm, '<h2>$1</h2>')
+        .replace(/^# (.*$)/gm, '<h1>$1</h1>');
+      
+      // Handle inline elements
+      processedLine = processedLine
+        // Bold
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        // Italic
+        .replace(/\*(.*?)\*/g, '<em>$1</em>')
+        // Inline code
+        .replace(/`([^`]+)`/g, '<code>$1</code>');
+      
+      // Handle lists
+      if (processedLine.match(/^\s*\d+\.\s+(.*)$/)) {
+        processedLine = processedLine.replace(/^\s*\d+\.\s+(.*$)/, '<li>$1</li>');
+        // Wrap in <ol> if not already in a list
+        if (!result.endsWith('</li>')) {
+          processedLine = '<ol>' + processedLine;
+        }
+        if (i === lines.length - 1 || !lines[i + 1].match(/^\s*\d+\.\s+(.*)$/)) {
+          processedLine += '</ol>';
+        }
+      } else if (processedLine.match(/^\s*[\-*]\s+(.*$)/)) {
+        processedLine = processedLine.replace(/^\s*[\-*]\s+(.*$)/, '<li>$1</li>');
+        // Wrap in <ul> if not already in a list
+        if (!result.endsWith('</li>')) {
+          processedLine = '<ul>' + processedLine;
+        }
+        if (i === lines.length - 1 || !lines[i + 1].match(/^\s*[\-*]\s+(.*$)/)) {
+          processedLine += '</ul>';
+        }
+      } 
+      // Handle paragraphs but not for lines that already have HTML tags
+      else if (processedLine.trim() !== '' && !processedLine.trim().startsWith('<')) {
+        processedLine = '<p>' + processedLine + '</p>';
+      }
+      
+      result += processedLine;
+    }
+    
+    // Clean up any unclosed code blocks
+    if (inCodeBlock) {
+      result += `<pre><code>${escapeHtml(codeContent)}</code></pre>`;
+    }
+    
+    // Fix search result formatting
+    result = result
+      // Handle custom search result format
+      .replace(/<strong>JSON Path:<\/strong>/g, '<div class="search-result-label">JSON Path:</div><div class="search-result-value">')
+      .replace(/<strong>Matching Value:<\/strong>/g, '</div><div class="search-result-label">Matching Value:</div><div class="search-result-value">')
+      .replace(/<strong>Explanation:<\/strong>/g, '</div><div class="search-result-label">Explanation:</div><div class="search-result-value">')
+      .replace(/---<\/p>/g, '</div><hr class="md-hr">');
+    
+    // Ensure all search-result-value divs are closed
+    if (result.includes('<div class="search-result-value">') && 
+        !result.endsWith('</div>')) {
+      result += '</div>';
+    }
+    
+    return result;
   }
 };
 

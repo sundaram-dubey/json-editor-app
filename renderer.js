@@ -14,6 +14,11 @@ let hasUnsavedChanges = false;
 let isFileExplorerVisible = false;
 let currentlyOpenedFile = null;
 
+// AI Feature implementations
+let geminiApiKey = localStorage.getItem('geminiApiKey') || '';
+let selectedJsonPath = null;
+let currentJsonKeyContext = null;
+
 // Initialize ACE editor
 function initEditor() {
   console.log('Initializing editor...');
@@ -1525,6 +1530,616 @@ function setupBeforeUnloadWarning() {
   });
 }
 
+// Gemini API Functions
+async function callGeminiAPI(prompt, jsonContent) {
+  if (!geminiApiKey) {
+    throw new Error('Gemini API key is required. Please add your API key in Settings.');
+  }
+
+  try {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`;
+    const fullPrompt = jsonContent ? `${prompt}\n\nJSON Content:\n\`\`\`json\n${jsonContent}\n\`\`\`` : prompt;
+    
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        contents: [{
+          parts: [{ text: fullPrompt }]
+        }]
+      })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(`API Error: ${errorData.error?.message || 'Unknown error'}`);
+    }
+
+    const data = await response.json();
+    return data.candidates[0]?.content?.parts[0]?.text || 'No response from the AI.';
+  } catch (error) {
+    console.error('Gemini API Error:', error);
+    throw error;
+  }
+}
+
+// Settings functions
+function showSettings() {
+  document.getElementById('geminiApiKey').value = geminiApiKey || '';
+  openModal('settingsModal');
+}
+
+function saveSettings() {
+  const apiKey = document.getElementById('geminiApiKey').value.trim();
+  const theme = document.getElementById('editorTheme').value;
+  const fontSize = document.getElementById('editorFontSize').value;
+  
+  // Save API key
+  geminiApiKey = apiKey;
+  localStorage.setItem('geminiApiKey', apiKey);
+  
+  // Apply editor settings
+  editor.setTheme(theme);
+  editor.setOptions({ fontSize: fontSize });
+  localStorage.setItem('editorTheme', theme);
+  localStorage.setItem('editorFontSize', fontSize);
+  
+  // Apply settings to compare editors as well
+  if (compareEditorA && compareEditorB) {
+    compareEditorA.setTheme(theme);
+    compareEditorA.setOptions({ fontSize: fontSize });
+    compareEditorB.setTheme(theme);
+    compareEditorB.setOptions({ fontSize: fontSize });
+  }
+  
+  closeModal('settingsModal');
+  updateStatus('Settings saved successfully', 'success');
+}
+
+function toggleApiKeyVisibility() {
+  const apiKeyInput = document.getElementById('geminiApiKey');
+  const toggleBtn = document.getElementById('btnToggleApiKey');
+  
+  if (apiKeyInput.type === 'password') {
+    apiKeyInput.type = 'text';
+    toggleBtn.innerHTML = '<i class="fas fa-eye-slash"></i>';
+  } else {
+    apiKeyInput.type = 'password';
+    toggleBtn.innerHTML = '<i class="fas fa-eye"></i>';
+  }
+}
+
+// AI Menu functions
+function showAiToolsMenu(event) {
+  const menu = document.getElementById('aiToolsMenu');
+  const rect = event.currentTarget.getBoundingClientRect();
+  
+  menu.style.top = `${rect.bottom + 5}px`;
+  menu.style.left = `${rect.left}px`;
+  menu.classList.remove('hidden');
+  
+  // Close the menu when clicking outside
+  const closeMenu = (e) => {
+    if (!menu.contains(e.target) && e.target !== event.currentTarget) {
+      menu.classList.add('hidden');
+      document.removeEventListener('mousedown', closeMenu);
+    }
+  };
+  
+  document.addEventListener('mousedown', closeMenu);
+}
+
+// AI Explain functions
+function showExplainJsonModal() {
+  // Get editor content
+  const jsonContent = editor.getValue();
+  document.getElementById('explainJsonPath').textContent = 'Full JSON Document';
+  
+  // Show modal
+  openModal('aiExplainModal');
+  
+  // Start explanation
+  explainJson(jsonContent, 'full');
+}
+
+async function explainJson(jsonContent, pathType) {
+  try {
+    // Validate JSON first
+    JSON.parse(jsonContent);
+    
+    // Show loader
+    document.querySelector('#aiExplainModal .ai-loader').classList.remove('hidden');
+    document.getElementById('aiExplanationResult').innerHTML = '';
+    
+    // Create the prompt based on path type
+    let prompt;
+    if (pathType === 'full') {
+      prompt = 'Please explain this JSON document in detail, including the structure, purpose of key fields, data types, and any patterns you notice. If this appears to be a specific type of data structure or API response, please mention that.';
+    } else {
+      prompt = `Please explain the JSON at path "${selectedJsonPath}". Describe what this field likely represents, its data type, possible values, and how it might be used in the application. If this is a common data pattern, please explain.`;
+    }
+    
+    // Call Gemini API
+    const explanation = await callGeminiAPI(prompt, jsonContent);
+    
+    // Display the result
+    document.getElementById('aiExplanationResult').innerHTML = marked.parse(explanation);
+    
+  } catch (error) {
+    document.getElementById('aiExplanationResult').innerHTML = `
+      <div class="error-message">
+        <strong>Error:</strong> ${error.message}
+      </div>
+    `;
+  } finally {
+    // Hide loader
+    document.querySelector('#aiExplainModal .ai-loader').classList.add('hidden');
+  }
+}
+
+// AI Fix JSON functions
+function showFixJsonModal() {
+  // Get editor content
+  const jsonContent = editor.getValue();
+  
+  // Show modal
+  openModal('fixJsonModal');
+  
+  // Start fixing
+  fixJson(jsonContent);
+}
+
+async function fixJson(jsonContent) {
+  try {
+    // Try to parse JSON first to see if it's already valid
+    try {
+      JSON.parse(jsonContent);
+      // If we get here, JSON is valid, so just format it
+      document.getElementById('jsonIssues').textContent = 'No issues found. Your JSON is valid.';
+      const formattedJson = JSON.stringify(JSON.parse(jsonContent), null, 2);
+      document.getElementById('fixedJson').innerHTML = `<pre>${escapeHtml(formattedJson)}</pre>`;
+      document.getElementById('btnApplyFix').disabled = true;
+      return;
+    } catch (parseError) {
+      // JSON is invalid, continue with fixing
+    }
+    
+    // Show loader
+    document.querySelector('#fixJsonModal .ai-loader').classList.remove('hidden');
+    document.getElementById('jsonIssues').innerHTML = '';
+    document.getElementById('fixedJson').innerHTML = '';
+    document.getElementById('btnApplyFix').disabled = true;
+    
+    // Create the prompt
+    const prompt = `
+    I have some invalid JSON that needs to be fixed. Please analyze the JSON, identify the issues, and return a corrected version.
+    In your response, first list the specific issues you found with line numbers if possible.
+    Then, provide the fixed JSON. Make sure to preserve the original structure and data as much as possible.
+    Format your response with "ISSUES:" followed by the list of issues, then "FIXED_JSON:" followed by the corrected JSON.
+    `;
+    
+    // Call Gemini API
+    const result = await callGeminiAPI(prompt, jsonContent);
+    
+    // Parse the response to extract issues and fixed JSON
+    const issuesMatch = result.match(/ISSUES:([\s\S]*?)(?:FIXED_JSON:|$)/i);
+    const fixedJsonMatch = result.match(/FIXED_JSON:([\s\S]*)/i);
+    
+    let issues = issuesMatch ? issuesMatch[1].trim() : 'Could not identify specific issues.';
+    let fixedJson = fixedJsonMatch ? fixedJsonMatch[1].trim() : '';
+    
+    // Try to extract just the JSON part from the fixed JSON
+    try {
+      const jsonStart = fixedJson.indexOf('{');
+      const jsonEnd = fixedJson.lastIndexOf('}') + 1;
+      if (jsonStart >= 0 && jsonEnd > jsonStart) {
+        fixedJson = fixedJson.substring(jsonStart, jsonEnd);
+      }
+    } catch (e) {
+      console.error('Error extracting JSON:', e);
+    }
+    
+    // Display the issues
+    document.getElementById('jsonIssues').innerHTML = marked.parse(issues);
+    
+    // Format and display the fixed JSON
+    try {
+      const parsedJson = JSON.parse(fixedJson);
+      const formattedJson = JSON.stringify(parsedJson, null, 2);
+      document.getElementById('fixedJson').innerHTML = `<pre>${escapeHtml(formattedJson)}</pre>`;
+      document.getElementById('btnApplyFix').disabled = false;
+    } catch (e) {
+      document.getElementById('fixedJson').innerHTML = `
+        <div class="error-message">
+          <strong>Error:</strong> Could not parse the fixed JSON. The AI might not have generated valid JSON.
+        </div>
+        <pre>${escapeHtml(fixedJson)}</pre>
+      `;
+      document.getElementById('btnApplyFix').disabled = true;
+    }
+    
+  } catch (error) {
+    document.getElementById('jsonIssues').innerHTML = `
+      <div class="error-message">
+        <strong>Error:</strong> ${error.message}
+      </div>
+    `;
+    document.getElementById('fixedJson').innerHTML = '';
+    document.getElementById('btnApplyFix').disabled = true;
+  } finally {
+    // Hide loader
+    document.querySelector('#fixJsonModal .ai-loader').classList.add('hidden');
+  }
+}
+
+function applyFixedJson() {
+  try {
+    const fixedJsonElement = document.getElementById('fixedJson');
+    const preElement = fixedJsonElement.querySelector('pre');
+    if (preElement) {
+      const fixedJson = preElement.textContent;
+      editor.setValue(fixedJson, -1);
+      closeModal('fixJsonModal');
+      updateStatus('Fixed JSON applied successfully', 'success');
+    }
+  } catch (error) {
+    updateStatus(`Error applying fix: ${error.message}`, 'error');
+  }
+}
+
+// Smart Search functions
+function showSmartSearchModal() {
+  openModal('smartSearchModal');
+  document.getElementById('smartSearchQuery').focus();
+}
+
+async function runSmartSearch() {
+  const query = document.getElementById('smartSearchQuery').value.trim();
+  if (!query) return;
+  
+  const jsonContent = editor.getValue();
+  
+  try {
+    // Validate JSON first
+    JSON.parse(jsonContent);
+    
+    // Show loader
+    document.querySelector('#smartSearchModal .ai-loader').classList.remove('hidden');
+    document.getElementById('smartSearchResults').innerHTML = '';
+    
+    // Create the prompt
+    const prompt = `
+    I have a JSON document and I want to search it using natural language. 
+    My search query is: "${query}"
+    
+    Please analyze the JSON and find the relevant parts that match this query. 
+    For each match, provide:
+    1. The JSON path to the matching element(s)
+    2. The matching value(s)
+    3. A brief explanation of why this is relevant to my query
+    
+    Format the response in clear sections with Markdown formatting for better readability.
+    If no matches are found, please suggest alternative search terms.
+    `;
+    
+    // Call Gemini API
+    const result = await callGeminiAPI(prompt, jsonContent);
+    
+    // Display the result
+    document.getElementById('smartSearchResults').innerHTML = marked.parse(result);
+    
+  } catch (error) {
+    document.getElementById('smartSearchResults').innerHTML = `
+      <div class="error-message">
+        <strong>Error:</strong> ${error.message}
+      </div>
+    `;
+  } finally {
+    // Hide loader
+    document.querySelector('#smartSearchModal .ai-loader').classList.add('hidden');
+  }
+}
+
+// AI Schema Generator
+function showAiSchemaGenerator() {
+  // Just use the existing schema generator with an improved version
+  generateAiEnhancedSchema();
+}
+
+async function generateAiEnhancedSchema() {
+  if (!editor) return;
+  
+  try {
+    const content = editor.getValue();
+    const data = JSON.parse(content);
+    
+    // Create a basic schema
+    const basicSchema = {
+      $schema: "http://json-schema.org/draft-07/schema#",
+      type: Array.isArray(data) ? 'array' : 'object'
+    };
+    
+    // For objects, generate properties schema
+    if (typeof data === 'object' && !Array.isArray(data)) {
+      basicSchema.properties = {};
+      basicSchema.required = [];
+      
+      Object.keys(data).forEach(key => {
+        basicSchema.required.push(key);
+        basicSchema.properties[key] = getTypeSchema(data[key]);
+      });
+    }
+    
+    // For arrays, generate items schema if array is not empty
+    if (Array.isArray(data) && data.length > 0) {
+      // Use the first item as a reference
+      basicSchema.items = getTypeSchema(data[0]);
+    }
+    
+    // Now enhance the schema with AI
+    updateStatus('Generating enhanced schema...', 'warning');
+    
+    // Call Gemini API to enhance the schema
+    const prompt = `
+    I have a JSON schema that was automatically generated. Please enhance it by:
+    1. Adding proper titles and descriptions for fields
+    2. Adding appropriate format validators for fields like email, date, url, etc.
+    3. Adding pattern validators for strings where appropriate
+    4. Suggesting reasonable min/max values for numbers
+    5. Improving enum values for fields that have a limited set of possible values
+    6. Adding any other improvements that would make this schema more useful and descriptive
+    
+    The basic schema is:
+    \`\`\`json
+    ${JSON.stringify(basicSchema, null, 2)}
+    \`\`\`
+    
+    Please return only the enhanced JSON schema as valid JSON, with no additional text or explanation.
+    `;
+    
+    const enhancedSchemaText = await callGeminiAPI(prompt, content);
+    
+    // Extract just the JSON part from the response
+    const jsonStart = enhancedSchemaText.indexOf('{');
+    const jsonEnd = enhancedSchemaText.lastIndexOf('}') + 1;
+    let enhancedSchemaJson;
+    
+    if (jsonStart >= 0 && jsonEnd > jsonStart) {
+      enhancedSchemaJson = enhancedSchemaText.substring(jsonStart, jsonEnd);
+    } else {
+      // Fallback to the entire response
+      enhancedSchemaJson = enhancedSchemaText;
+    }
+    
+    // Parse the enhanced schema
+    try {
+      currentSchema = JSON.parse(enhancedSchemaJson);
+      updateStatus('Schema generated successfully', 'success');
+      document.getElementById('schema-info').textContent = 'Schema: AI Enhanced';
+      
+      // Show the schema
+      document.getElementById('schemaResults').textContent = JSON.stringify(currentSchema, null, 2);
+      openModal('schemaModal');
+    } catch (error) {
+      // If parsing fails, fall back to the basic schema
+      currentSchema = basicSchema;
+      updateStatus('Enhanced schema parsing failed, using basic schema', 'warning');
+      document.getElementById('schema-info').textContent = 'Schema: Basic (AI enhancement failed)';
+      
+      // Show the basic schema
+      document.getElementById('schemaResults').textContent = JSON.stringify(basicSchema, null, 2);
+      openModal('schemaModal');
+    }
+    
+  } catch (error) {
+    updateStatus(`Error generating schema: ${error.message}`, 'error');
+  }
+}
+
+// Mock Data Generator
+function showMockDataModal() {
+  openModal('mockDataModal');
+  document.getElementById('mockDataPrompt').focus();
+}
+
+async function generateMockData() {
+  const prompt = document.getElementById('mockDataPrompt').value.trim();
+  if (!prompt) return;
+  
+  const isFormatted = document.getElementById('mockDataFormatted').checked;
+  
+  try {
+    // Show loader
+    document.querySelector('#mockDataModal .ai-loader').classList.remove('hidden');
+    document.getElementById('mockDataResults').innerHTML = '<div class="mock-data-placeholder">Generating...</div>';
+    document.getElementById('btnUseMockData').disabled = true;
+    
+    // Create the prompt
+    const aiPrompt = `
+    Generate mock JSON data based on the following description: "${prompt}"
+    
+    Please create realistic, detailed mock data that matches the description.
+    The response should be ONLY valid JSON with no additional text or explanation.
+    ${isFormatted ? 'Format the JSON with proper indentation for readability.' : 'Compress the JSON without unnecessary whitespace.'}
+    `;
+    
+    // Call Gemini API
+    const result = await callGeminiAPI(aiPrompt);
+    
+    // Extract just the JSON part from the response
+    const jsonStart = result.indexOf('{');
+    const jsonEnd = result.lastIndexOf('}') + 1;
+    let mockData;
+    
+    if (jsonStart >= 0 && jsonEnd > jsonStart) {
+      mockData = result.substring(jsonStart, jsonEnd);
+    } else {
+      // Check for array format
+      const arrayStart = result.indexOf('[');
+      const arrayEnd = result.lastIndexOf(']') + 1;
+      if (arrayStart >= 0 && arrayEnd > arrayStart) {
+        mockData = result.substring(arrayStart, arrayEnd);
+      } else {
+        // Fallback to the entire response
+        mockData = result;
+      }
+    }
+    
+    // Try to parse and display the JSON
+    try {
+      const parsedJson = JSON.parse(mockData);
+      const formattedJson = isFormatted ? JSON.stringify(parsedJson, null, 2) : JSON.stringify(parsedJson);
+      document.getElementById('mockDataResults').innerHTML = `<pre>${escapeHtml(formattedJson)}</pre>`;
+      document.getElementById('btnUseMockData').disabled = false;
+    } catch (e) {
+      document.getElementById('mockDataResults').innerHTML = `
+        <div class="error-message">
+          <strong>Error:</strong> Could not parse the generated JSON. The AI might not have generated valid JSON.
+        </div>
+        <pre>${escapeHtml(mockData)}</pre>
+      `;
+      document.getElementById('btnUseMockData').disabled = true;
+    }
+    
+  } catch (error) {
+    document.getElementById('mockDataResults').innerHTML = `
+      <div class="error-message">
+        <strong>Error:</strong> ${error.message}
+      </div>
+    `;
+    document.getElementById('btnUseMockData').disabled = true;
+  } finally {
+    // Hide loader
+    document.querySelector('#mockDataModal .ai-loader').classList.add('hidden');
+  }
+}
+
+function useMockData() {
+  try {
+    const mockDataElement = document.getElementById('mockDataResults');
+    const preElement = mockDataElement.querySelector('pre');
+    if (preElement) {
+      const mockData = preElement.textContent;
+      editor.setValue(mockData, -1);
+      closeModal('mockDataModal');
+      updateStatus('Mock data applied successfully', 'success');
+    }
+  } catch (error) {
+    updateStatus(`Error applying mock data: ${error.message}`, 'error');
+  }
+}
+
+// Context menu for JSON tree
+function setupJsonTreeContextMenu() {
+  const treeContainer = document.getElementById('json-tree');
+  const contextMenu = document.getElementById('jsonKeyContextMenu');
+  
+  treeContainer.addEventListener('contextmenu', (e) => {
+    // Find the closest node element
+    const node = e.target.closest('.json-tree-node');
+    if (!node) return;
+    
+    // Get the path from the node
+    selectedJsonPath = node.dataset.path;
+    if (!selectedJsonPath) return;
+    
+    // Get the JSON at this path
+    try {
+      const json = editor.getValue();
+      const parsedJson = JSON.parse(json);
+      
+      // Navigate to the selected path
+      let pathParts = selectedJsonPath.split('.');
+      if (pathParts[0] === '$') pathParts = pathParts.slice(1);
+      
+      let currentObj = parsedJson;
+      for (const part of pathParts) {
+        if (part === '$') continue;
+        
+        // Handle array indices in path
+        const arrayMatch = part.match(/\[(\d+)\]/);
+        if (arrayMatch) {
+          currentObj = currentObj[parseInt(arrayMatch[1])];
+        } else {
+          currentObj = currentObj[part];
+        }
+        
+        if (currentObj === undefined) return;
+      }
+      
+      // Store the JSON for this key
+      currentJsonKeyContext = JSON.stringify(currentObj, null, 2);
+      
+      // Position and show the context menu
+      e.preventDefault();
+      contextMenu.style.top = `${e.pageY}px`;
+      contextMenu.style.left = `${e.pageX}px`;
+      contextMenu.classList.remove('hidden');
+      
+      // Close the menu when clicking outside
+      const closeContextMenu = (e) => {
+        if (!contextMenu.contains(e.target)) {
+          contextMenu.classList.add('hidden');
+          document.removeEventListener('mousedown', closeContextMenu);
+        }
+      };
+      
+      document.addEventListener('mousedown', closeContextMenu);
+    } catch (error) {
+      console.error('Error setting up context menu:', error);
+    }
+  });
+}
+
+function explainJsonKey() {
+  if (!selectedJsonPath || !currentJsonKeyContext) return;
+  
+  document.getElementById('explainJsonPath').textContent = selectedJsonPath;
+  openModal('aiExplainModal');
+  explainJson(currentJsonKeyContext, 'key');
+}
+
+// Helper functions
+function escapeHtml(unsafe) {
+  return unsafe
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+// Initialize marked library for Markdown parsing
+const marked = {
+  parse: function(text) {
+    // Simple Markdown parser implementation
+    return text
+      // Headers
+      .replace(/^### (.*$)/gim, '<h3>$1</h3>')
+      .replace(/^## (.*$)/gim, '<h2>$1</h2>')
+      .replace(/^# (.*$)/gim, '<h1>$1</h1>')
+      // Bold
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+      // Italic
+      .replace(/\*(.*?)\*/g, '<em>$1</em>')
+      // Code blocks
+      .replace(/```([\s\S]*?)```/g, (match, p1) => `<pre><code>${escapeHtml(p1.trim())}</code></pre>`)
+      // Inline code
+      .replace(/`([^`]+)`/g, '<code>$1</code>')
+      // Lists
+      .replace(/^\s*\d+\.\s+(.*$)/gim, '<ol><li>$1</li></ol>')
+      .replace(/^\s*[\-*]\s+(.*$)/gim, '<ul><li>$1</li></ul>')
+      // Paragraphs
+      .replace(/^(?!<[oluh])(.+)(?=\n|$)/gim, '<p>$1</p>')
+      // Fix nested lists
+      .replace(/<\/[ou]l>\n<[ou]l>/g, '')
+      // Fix newlines
+      .replace(/\n/g, '');
+  }
+};
+
 // Initialize the application
 document.addEventListener('DOMContentLoaded', () => {
   console.log('DOM loaded, initializing application...');
@@ -1699,4 +2314,52 @@ document.addEventListener('DOMContentLoaded', () => {
   window.api.receiveToggleFileExplorer(() => {
     toggleFileExplorer();
   });
+  
+  // AI Features event listeners
+  document.getElementById('btnSettings').addEventListener('click', showSettings);
+  document.getElementById('btnSaveSettings').addEventListener('click', saveSettings);
+  document.getElementById('btnToggleApiKey').addEventListener('click', toggleApiKeyVisibility);
+  
+  document.getElementById('btnAiFeatures').addEventListener('click', showAiToolsMenu);
+  document.getElementById('menuExplainJson').addEventListener('click', showExplainJsonModal);
+  document.getElementById('menuFixJson').addEventListener('click', showFixJsonModal);
+  document.getElementById('menuSmartSearch').addEventListener('click', showSmartSearchModal);
+  document.getElementById('menuAiSchema').addEventListener('click', showAiSchemaGenerator);
+  document.getElementById('menuMockData').addEventListener('click', showMockDataModal);
+  
+  document.getElementById('menuExplainJsonKey').addEventListener('click', explainJsonKey);
+  document.getElementById('menuCopyJsonPath').addEventListener('click', () => {
+    if (selectedJsonPath) {
+      navigator.clipboard.writeText(selectedJsonPath);
+      updateStatus('Path copied to clipboard', 'success');
+      document.getElementById('jsonKeyContextMenu').classList.add('hidden');
+    }
+  });
+  
+  document.getElementById('btnRunSmartSearch').addEventListener('click', runSmartSearch);
+  document.getElementById('smartSearchQuery').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') runSmartSearch();
+  });
+  
+  document.getElementById('btnGenerateMockData').addEventListener('click', generateMockData);
+  document.getElementById('btnUseMockData').addEventListener('click', useMockData);
+  
+  document.getElementById('btnApplyFix').addEventListener('click', applyFixedJson);
+  
+  // Set up context menu for JSON tree
+  setupJsonTreeContextMenu();
+  
+  // Load editor settings
+  const savedTheme = localStorage.getItem('editorTheme');
+  const savedFontSize = localStorage.getItem('editorFontSize');
+  
+  if (savedTheme) {
+    editor.setTheme(savedTheme);
+    document.getElementById('editorTheme').value = savedTheme;
+  }
+  
+  if (savedFontSize) {
+    editor.setOptions({ fontSize: savedFontSize });
+    document.getElementById('editorFontSize').value = savedFontSize;
+  }
 }); 

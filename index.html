@@ -45,6 +45,13 @@
         <button id="btnFind" class="btn" title="Find (Cmd+F)">
           <i class="fas fa-search"></i> Find
         </button>
+        <div class="btn-divider"></div>
+        <button id="btnAiFeatures" class="btn btn-ai" title="AI Features">
+          <i class="fas fa-robot"></i> AI Tools
+        </button>
+        <button id="btnSettings" class="btn" title="Settings">
+          <i class="fas fa-cog"></i>
+        </button>
       </div>
     </div>
 
@@ -253,6 +260,239 @@
     </div>
   </div>
 
+  <!-- Settings Modal -->
+  <div id="settingsModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2><i class="fas fa-cog"></i> Settings</h2>
+        <span class="close" data-modal="settingsModal">&times;</span>
+      </div>
+      <div class="modal-body">
+        <div class="settings-section">
+          <h3>AI Features</h3>
+          <div class="form-group">
+            <label for="geminiApiKey">Gemini API Key:</label>
+            <div class="api-key-input">
+              <input type="password" id="geminiApiKey" class="form-control" placeholder="Enter your Gemini API key">
+              <button id="btnToggleApiKey" class="btn btn-sm">
+                <i class="fas fa-eye"></i>
+              </button>
+            </div>
+            <p class="help-text">
+              To use AI-powered features, you need to provide a Gemini API key. 
+              <a href="https://ai.google.dev/" target="_blank">Get your API key here</a>.
+            </p>
+          </div>
+          <div class="premium-features-list">
+            <div class="premium-feature">
+              <i class="fas fa-comment"></i>
+              <div>
+                <h4>AI Explain</h4>
+                <p>Right-click on JSON key → "Explain this"</p>
+              </div>
+            </div>
+            <div class="premium-feature">
+              <i class="fas fa-wrench"></i>
+              <div>
+                <h4>Fix JSON</h4>
+                <p>Auto-detect & fix broken JSON</p>
+              </div>
+            </div>
+            <div class="premium-feature">
+              <i class="fas fa-search"></i>
+              <div>
+                <h4>Smart Search</h4>
+                <p>Natural language search inside JSON</p>
+              </div>
+            </div>
+            <div class="premium-feature">
+              <i class="fas fa-file-code"></i>
+              <div>
+                <h4>Schema Generator</h4>
+                <p>Generate JSON Schema from data</p>
+              </div>
+            </div>
+            <div class="premium-feature">
+              <i class="fas fa-random"></i>
+              <div>
+                <h4>Mock Data</h4>
+                <p>Generate test data using AI prompts</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="settings-section">
+          <h3>Editor Settings</h3>
+          <div class="form-group">
+            <label for="editorTheme">Theme:</label>
+            <select id="editorTheme" class="form-control">
+              <option value="ace/theme/textmate">Textmate (Light)</option>
+              <option value="ace/theme/monokai">Monokai (Dark)</option>
+              <option value="ace/theme/github">GitHub</option>
+              <option value="ace/theme/solarized_dark">Solarized Dark</option>
+              <option value="ace/theme/solarized_light">Solarized Light</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="editorFontSize">Font Size:</label>
+            <select id="editorFontSize" class="form-control">
+              <option value="12px">12px</option>
+              <option value="14px" selected>14px</option>
+              <option value="16px">16px</option>
+              <option value="18px">18px</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button id="btnSaveSettings" class="btn btn-primary">Save Settings</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- AI Tools Dropdown Menu -->
+  <div id="aiToolsMenu" class="dropdown-menu hidden">
+    <div class="dropdown-item" id="menuExplainJson">
+      <i class="fas fa-comment"></i> Explain JSON
+    </div>
+    <div class="dropdown-item" id="menuFixJson">
+      <i class="fas fa-wrench"></i> Fix JSON
+    </div>
+    <div class="dropdown-item" id="menuSmartSearch">
+      <i class="fas fa-search"></i> Smart Search
+    </div>
+    <div class="dropdown-item" id="menuAiSchema">
+      <i class="fas fa-file-code"></i> Generate Schema
+    </div>
+    <div class="dropdown-item" id="menuMockData">
+      <i class="fas fa-random"></i> Generate Mock Data
+    </div>
+  </div>
+
+  <!-- AI Context Menu for JSON Tree -->
+  <div id="jsonKeyContextMenu" class="context-menu hidden">
+    <div class="context-menu-item" id="menuExplainJsonKey">
+      <i class="fas fa-comment"></i> Explain this key
+    </div>
+    <div class="context-menu-item" id="menuCopyJsonPath">
+      <i class="fas fa-clipboard"></i> Copy path
+    </div>
+  </div>
+
+  <!-- AI Explain Modal -->
+  <div id="aiExplainModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2><i class="fas fa-comment"></i> AI Explanation</h2>
+        <span class="close" data-modal="aiExplainModal">&times;</span>
+      </div>
+      <div class="modal-body">
+        <div class="path-info">
+          <strong>Path:</strong> <span id="explainJsonPath"></span>
+        </div>
+        <div class="ai-loader hidden">
+          <div class="spinner"></div>
+          <p>Generating explanation...</p>
+        </div>
+        <div id="aiExplanationResult" class="ai-result">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Smart Search Modal -->
+  <div id="smartSearchModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2><i class="fas fa-search"></i> Smart Search</h2>
+        <span class="close" data-modal="smartSearchModal">&times;</span>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="smartSearchQuery">Ask about your JSON data:</label>
+          <div class="search-with-button">
+            <input type="text" id="smartSearchQuery" class="form-control" placeholder="E.g., 'Find all users from New York'">
+            <button id="btnRunSmartSearch" class="btn btn-primary">Search</button>
+          </div>
+        </div>
+        <div class="ai-loader hidden">
+          <div class="spinner"></div>
+          <p>Processing query...</p>
+        </div>
+        <div id="smartSearchResults" class="ai-result">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mock Data Generator Modal -->
+  <div id="mockDataModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2><i class="fas fa-random"></i> Generate Mock Data</h2>
+        <span class="close" data-modal="mockDataModal">&times;</span>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="mockDataPrompt">Describe the data you need:</label>
+          <textarea id="mockDataPrompt" class="form-control" rows="3" placeholder="E.g., 'Generate a list of 5 users with names, emails, and addresses'"></textarea>
+        </div>
+        <div class="form-group">
+          <label>Options:</label>
+          <div class="checkbox-group">
+            <label><input type="checkbox" id="mockDataFormatted" checked> Formatted JSON</label>
+          </div>
+        </div>
+        <div class="ai-loader hidden">
+          <div class="spinner"></div>
+          <p>Generating mock data...</p>
+        </div>
+        <div id="mockDataResults" class="ai-result">
+          <div class="mock-data-placeholder empty-result">
+            Mock data will appear here...
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button id="btnGenerateMockData" class="btn btn-primary">Generate</button>
+          <button id="btnUseMockData" class="btn" disabled>Use This Data</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Fix JSON Modal -->
+  <div id="fixJsonModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2><i class="fas fa-wrench"></i> Fix JSON</h2>
+        <span class="close" data-modal="fixJsonModal">&times;</span>
+      </div>
+      <div class="modal-body">
+        <div class="ai-loader hidden">
+          <div class="spinner"></div>
+          <p>Fixing JSON...</p>
+        </div>
+        <div id="fixJsonResults" class="ai-result">
+          <div class="before-after-container">
+            <div class="before-container">
+              <h3>Issues Found</h3>
+              <div id="jsonIssues" class="json-issues">
+              </div>
+            </div>
+            <div class="after-container">
+              <h3>Fixed JSON</h3>
+              <div id="fixedJson" class="fixed-json">
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button id="btnApplyFix" class="btn btn-primary" disabled>Apply Fix</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  
   <!-- Load ACE editor -->
   <script src="node_modules/ace-builds/src-min/ace.js"></script>
   <script src="node_modules/ace-builds/src-min/mode-json.js"></script>

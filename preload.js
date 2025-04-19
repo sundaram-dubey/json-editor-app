@@ -20,6 +20,12 @@ contextBridge.exposeInMainWorld(
     },
     saveFileAs: (content) => ipcRenderer.invoke('save-file-as', content),
     openFile: () => ipcRenderer.send('open-file'),
+    receiveBrowseFolderRequest: (callback) => {
+      ipcRenderer.on('browse-folder', (event, ...args) => callback(...args));
+    },
+    receiveToggleFileExplorer: (callback) => {
+      ipcRenderer.on('toggle-file-explorer', (event, ...args) => callback(...args));
+    },
     
     // Import/Export operations
     receiveImportUrlRequest: (callback) => {
@@ -82,5 +88,18 @@ contextBridge.exposeInMainWorld(
     receiveShowShortcutsRequest: (callback) => {
       ipcRenderer.on('menu-show-shortcuts', (event, ...args) => callback(...args));
     }
+  }
+);
+
+// Also expose electronAPI for consistent interface with newer functionality
+contextBridge.exposeInMainWorld(
+  'electronAPI', {
+    // File operations
+    openFile: () => ipcRenderer.invoke('open-file-dialog'),
+    openFolder: () => ipcRenderer.invoke('open-folder-dialog'),
+    readFolder: (folderPath) => ipcRenderer.invoke('read-folder', folderPath),
+    readFile: (filePath) => ipcRenderer.invoke('read-file', filePath),
+    saveFile: (filePath, content) => ipcRenderer.invoke('save-file', filePath, content),
+    saveFileAs: (content) => ipcRenderer.invoke('save-file-as', content)
   }
 ); 

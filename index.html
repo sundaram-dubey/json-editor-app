@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline';">
-  <title>Swiggy JSON Editor</title>
+  <title>JSON Editor</title>
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
   <link rel="icon" type="image/png" href="build/icons/icon.png">
@@ -13,7 +13,7 @@
   <div class="app-container">
     <div class="toolbar">
       <div class="app-logo">
-        <span class="app-name">Swiggy JSON Editor</span>
+        <span class="app-name">JSON Editor</span>
       </div>
       <div class="toolbar-actions">
         <button id="btnNew" class="btn" title="New (Cmd+N)">
@@ -36,6 +36,9 @@
           <i class="fas fa-check-circle"></i> Validate
         </button>
         <div class="btn-divider"></div>
+        <button id="btnCompare" class="btn" title="Compare JSONs (Cmd+Shift+D)">
+          <i class="fas fa-code-branch"></i> Compare
+        </button>
         <button id="btnTreeView" class="btn" title="Toggle Tree View (Cmd+T)">
           <i class="fas fa-sitemap"></i> Tree View
         </button>
@@ -67,11 +70,38 @@
     </div>
 
     <div class="main-content">
+      <!-- File Explorer Sidebar -->
+      <div id="file-explorer" class="sidebar hidden">
+        <div class="sidebar-header">
+          <h3>File Explorer</h3>
+          <div class="sidebar-actions">
+            <button id="btnChooseFolderSidebar" class="btn btn-sm" title="Choose Folder">
+              <i class="fas fa-folder-open"></i>
+            </button>
+            <button id="btnRefreshFolder" class="btn btn-sm" title="Refresh">
+              <i class="fas fa-sync-alt"></i>
+            </button>
+            <button id="btnCloseSidebar" class="btn btn-sm" title="Close">
+              <i class="fas fa-times"></i>
+            </button>
+          </div>
+        </div>
+        <div class="folder-path">
+          <span id="sidebarFolderPath">No folder selected</span>
+        </div>
+        <div class="sidebar-content">
+          <div id="folderFileList" class="file-list">
+            <div class="empty-folder-message">Select a folder to view JSON files</div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Editor Panel -->
       <div id="editor-container" class="panel">
         <div id="editor"></div>
       </div>
       
-      <!-- Resizable Divider -->
+      <!-- Resizable Divider for Tree View -->
       <div id="divider" class="divider"></div>
       
       <div id="tree-container" class="panel hidden">
@@ -131,6 +161,47 @@
     </div>
   </div>
 
+  <!-- JSON Compare Modal -->
+  <div id="compareModal" class="modal">
+    <div class="modal-content modal-content-large">
+      <div class="modal-header">
+        <h2><i class="fas fa-code-branch"></i> Compare JSONs</h2>
+        <span class="close" data-modal="compareModal">&times;</span>
+      </div>
+      <div class="modal-body">
+        <div class="compare-container">
+          <div class="compare-inputs">
+            <div class="compare-input-section">
+              <h3>JSON A</h3>
+              <div class="input-controls">
+                <button id="btnLoadJsonA" class="btn btn-sm">Load from File</button>
+                <button id="btnPasteJsonA" class="btn btn-sm">Paste</button>
+                <button id="btnUseCurrentJsonA" class="btn btn-sm">Use Current</button>
+              </div>
+              <div id="jsonAEditor" class="compare-editor"></div>
+            </div>
+            <div class="compare-input-section">
+              <h3>JSON B</h3>
+              <div class="input-controls">
+                <button id="btnLoadJsonB" class="btn btn-sm">Load from File</button>
+                <button id="btnPasteJsonB" class="btn btn-sm">Paste</button>
+                <button id="btnUseCurrentJsonB" class="btn btn-sm">Use Current</button>
+              </div>
+              <div id="jsonBEditor" class="compare-editor"></div>
+            </div>
+          </div>
+          <div class="compare-actions">
+            <button id="btnRunCompare" class="btn btn-primary">Compare</button>
+          </div>
+          <div class="compare-results">
+            <h3>Comparison Results</h3>
+            <div id="compareResults" class="results-container"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Schema Validation Modal -->
   <div id="schemaModal" class="modal">
     <div class="modal-content">
@@ -167,6 +238,7 @@
             <tr><td>Format JSON</td><td>⌘⇧F</td></tr>
             <tr><td>Compress JSON</td><td>⌘⇧C</td></tr>
             <tr><td>Validate JSON</td><td>⌘⇧V</td></tr>
+            <tr><td>Compare JSONs</td><td>⌘⇧D</td></tr>
             <tr><td>Find</td><td>⌘F</td></tr>
             <tr><td>Toggle Tree View</td><td>⌘T</td></tr>
             <tr><td>Expand All</td><td>⌘]</td></tr>

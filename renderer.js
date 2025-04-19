@@ -7,6 +7,12 @@ let isTreeViewVisible = false;
 let currentSchema = null;
 let searchResults = [];
 let currentSearchIndex = -1;
+let compareEditorA = null;
+let compareEditorB = null;
+let currentFolderPath = null;
+let hasUnsavedChanges = false;
+let isFileExplorerVisible = false;
+let currentlyOpenedFile = null;
 
 // Initialize ACE editor
 function initEditor() {
@@ -32,7 +38,11 @@ function initEditor() {
   editor.focus();
   
   // Add change listeners for real-time validation
-  editor.session.on('change', debounce(validateEditorContent, 500));
+  editor.session.on('change', (e) => {
+    hasUnsavedChanges = true;
+    updateUnsavedIndicator();
+    debounce(validateEditorContent, 500)();
+  });
   
   // Add cursor change listener to update status bar
   editor.selection.on('changeCursor', updateCursorPosition);
@@ -762,14 +772,44 @@ function updateFileInfo(filePath) {
     currentFilePath = null;
     fileInfoElement.textContent = 'No file loaded';
   }
+  
+  // Update the unsaved changes indicator whenever file info is updated
+  updateUnsavedIndicator();
+}
+
+// Add a new function to update the unsaved changes indicator
+function updateUnsavedIndicator() {
+  const fileInfoElement = document.getElementById('file-info');
+  
+  // Remove any existing indicator
+  if (fileInfoElement.querySelector('.unsaved-indicator')) {
+    fileInfoElement.querySelector('.unsaved-indicator').remove();
+  }
+  
+  // Add indicator if there are unsaved changes
+  if (hasUnsavedChanges) {
+    const indicator = document.createElement('span');
+    indicator.className = 'unsaved-indicator';
+    indicator.textContent = ' •';
+    indicator.title = 'Unsaved changes';
+    fileInfoElement.appendChild(indicator);
+  }
 }
 
 // New file
 function newFile() {
+  // Check for unsaved changes
+  if (hasUnsavedChanges) {
+    if (!confirm('You have unsaved changes. Are you sure you want to create a new file?')) {
+      return;
+    }
+  }
+  
   editor.setValue('{\n  \n}', -1);
   updateFileInfo(null);
   currentSchema = null;
   document.getElementById('schema-info').textContent = 'No schema loaded';
+  hasUnsavedChanges = false;
   updateStatus('New file created', 'success');
 }
 
@@ -784,22 +824,51 @@ function saveFile() {
   }
 }
 
-// Save file as
-function saveFileAs() {
-  const content = editor.getValue();
-  window.api.saveFileAs(content).then(filePath => {
-    if (filePath) {
-      updateFileInfo(filePath);
+// Save current file
+async function saveCurrentFile() {
+  if (!currentFilePath) {
+    return saveFileAs();
+  }
+  
+  try {
+    const content = editor.getValue();
+    // Use the electronAPI to save the file to the current path
+    const result = await window.electronAPI.saveFile(currentFilePath, content);
+    if (result && result.success) {
+      hasUnsavedChanges = false;
       updateStatus('File saved successfully', 'success');
+    } else {
+      throw new Error('Failed to save file');
     }
-  });
+  } catch (err) {
+    updateStatus('Error saving file: ' + err.message, 'error');
+    // If there was an error, try saveFileAs as a fallback
+    saveFileAs();
+  }
 }
 
-// Save current file
-function saveCurrentFile() {
-  const content = editor.getValue();
-  // This would be implemented using ipcRenderer to save to currentFilePath
-  updateStatus('File saved successfully', 'success');
+// Save file as
+async function saveFileAs() {
+  try {
+    const content = editor.getValue();
+    const result = await window.electronAPI.saveFileAs(content);
+    if (result && !result.canceled && result.filePath) {
+      currentFilePath = result.filePath;
+      updateFileInfo(result.filePath);
+      hasUnsavedChanges = false;
+      updateStatus('File saved successfully', 'success');
+      
+      // Update file explorer if visible
+      if (isFileExplorerVisible && currentFolderPath) {
+        // Check if saved in current folder
+        if (result.filePath.startsWith(currentFolderPath)) {
+          refreshFolderInSidebar();
+        }
+      }
+    }
+  } catch (err) {
+    updateStatus('Error saving file: ' + err.message, 'error');
+  }
 }
 
 // Import JSON from URL
@@ -942,22 +1011,564 @@ function initResizableDivider() {
   }
 }
 
-// Initialize everything when the DOM is loaded
+// Initialize JSON comparison modal
+function initCompareModal() {
+  // Initialize JSON editors for comparison
+  compareEditorA = ace.edit('jsonAEditor');
+  compareEditorA.setTheme('ace/theme/textmate');
+  compareEditorA.session.setMode('ace/mode/json');
+  compareEditorA.setOptions({
+    enableBasicAutocompletion: true,
+    enableLiveAutocompletion: true,
+    showPrintMargin: false,
+    fontSize: '14px',
+    tabSize: 2
+  });
+  compareEditorA.setValue('{\n  \n}', -1);
+
+  compareEditorB = ace.edit('jsonBEditor');
+  compareEditorB.setTheme('ace/theme/textmate');
+  compareEditorB.session.setMode('ace/mode/json');
+  compareEditorB.setOptions({
+    enableBasicAutocompletion: true,
+    enableLiveAutocompletion: true,
+    showPrintMargin: false,
+    fontSize: '14px',
+    tabSize: 2
+  });
+  compareEditorB.setValue('{\n  \n}', -1);
+
+  // Set up event handlers for comparison buttons
+  document.getElementById('btnUseCurrentJsonA').addEventListener('click', () => {
+    compareEditorA.setValue(editor.getValue(), -1);
+  });
+
+  document.getElementById('btnUseCurrentJsonB').addEventListener('click', () => {
+    compareEditorB.setValue(editor.getValue(), -1);
+  });
+
+  document.getElementById('btnPasteJsonA').addEventListener('click', async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      compareEditorA.setValue(text, -1);
+    } catch (err) {
+      updateStatus('Failed to read clipboard: ' + err.message, 'error');
+    }
+  });
+
+  document.getElementById('btnPasteJsonB').addEventListener('click', async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      compareEditorB.setValue(text, -1);
+    } catch (err) {
+      updateStatus('Failed to read clipboard: ' + err.message, 'error');
+    }
+  });
+
+  document.getElementById('btnLoadJsonA').addEventListener('click', () => {
+    window.electronAPI.openFile().then(result => {
+      if (result && !result.canceled && result.filePaths.length > 0) {
+        const filePath = result.filePaths[0];
+        window.electronAPI.readFile(filePath).then(content => {
+          compareEditorA.setValue(content, -1);
+        }).catch(err => {
+          updateStatus('Error reading file: ' + err.message, 'error');
+        });
+      }
+    }).catch(err => {
+      updateStatus('Error opening file: ' + err.message, 'error');
+    });
+  });
+
+  document.getElementById('btnLoadJsonB').addEventListener('click', () => {
+    window.electronAPI.openFile().then(result => {
+      if (result && !result.canceled && result.filePaths.length > 0) {
+        const filePath = result.filePaths[0];
+        window.electronAPI.readFile(filePath).then(content => {
+          compareEditorB.setValue(content, -1);
+        }).catch(err => {
+          updateStatus('Error reading file: ' + err.message, 'error');
+        });
+      }
+    }).catch(err => {
+      updateStatus('Error opening file: ' + err.message, 'error');
+    });
+  });
+
+  document.getElementById('btnRunCompare').addEventListener('click', compareJsons);
+}
+
+// Compare two JSON objects
+function compareJsons() {
+  const resultsContainer = document.getElementById('compareResults');
+  resultsContainer.innerHTML = '';
+
+  try {
+    // Parse JSON content from both editors
+    const jsonAContent = compareEditorA.getValue();
+    const jsonBContent = compareEditorB.getValue();
+    
+    let jsonA, jsonB;
+    
+    try {
+      jsonA = JSON.parse(jsonAContent);
+    } catch (err) {
+      resultsContainer.innerHTML = '<div class="error-message">Error parsing JSON A: ' + err.message + '</div>';
+      return;
+    }
+    
+    try {
+      jsonB = JSON.parse(jsonBContent);
+    } catch (err) {
+      resultsContainer.innerHTML = '<div class="error-message">Error parsing JSON B: ' + err.message + '</div>';
+      return;
+    }
+    
+    // Perform the comparison
+    const diffs = findDifferences(jsonA, jsonB);
+    
+    if (diffs.length === 0) {
+      resultsContainer.innerHTML = '<div class="success-message">No differences found. The JSON objects are identical!</div>';
+      return;
+    }
+    
+    // Display the differences
+    diffs.forEach(diff => {
+      const diffItem = document.createElement('div');
+      diffItem.className = 'diff-item';
+      
+      const diffHeader = document.createElement('div');
+      diffHeader.className = 'diff-header';
+      
+      const diffType = document.createElement('span');
+      diffType.className = `diff-type diff-type-${diff.type}`;
+      diffType.textContent = diff.type.toUpperCase();
+      
+      const diffPath = document.createElement('span');
+      diffPath.className = 'diff-path';
+      diffPath.textContent = diff.path;
+      
+      diffHeader.appendChild(diffType);
+      diffHeader.appendChild(diffPath);
+      diffItem.appendChild(diffHeader);
+      
+      const diffContent = document.createElement('div');
+      diffContent.className = 'diff-content';
+      
+      if (diff.type === 'changed') {
+        const oldValue = document.createElement('div');
+        oldValue.className = 'diff-old-value';
+        oldValue.textContent = 'A: ' + JSON.stringify(diff.oldValue, null, 2);
+        
+        const newValue = document.createElement('div');
+        newValue.className = 'diff-new-value';
+        newValue.textContent = 'B: ' + JSON.stringify(diff.newValue, null, 2);
+        
+        diffContent.appendChild(oldValue);
+        diffContent.appendChild(newValue);
+      } else if (diff.type === 'added') {
+        const newValue = document.createElement('div');
+        newValue.className = 'diff-new-value';
+        newValue.textContent = JSON.stringify(diff.value, null, 2);
+        diffContent.appendChild(newValue);
+      } else if (diff.type === 'removed') {
+        const oldValue = document.createElement('div');
+        oldValue.className = 'diff-old-value';
+        oldValue.textContent = JSON.stringify(diff.value, null, 2);
+        diffContent.appendChild(oldValue);
+      }
+      
+      diffItem.appendChild(diffContent);
+      resultsContainer.appendChild(diffItem);
+    });
+  } catch (error) {
+    resultsContainer.innerHTML = '<div class="error-message">Error comparing JSON: ' + error.message + '</div>';
+  }
+}
+
+// Find differences between two JSON objects with sorted keys
+function findDifferences(objA, objB, path = '', diffs = []) {
+  // If both objects are primitive values
+  if (typeof objA !== 'object' || objA === null || typeof objB !== 'object' || objB === null) {
+    if (objA !== objB) {
+      diffs.push({
+        type: 'changed',
+        path: path || '$',
+        oldValue: objA,
+        newValue: objB
+      });
+    }
+    return diffs;
+  }
+  
+  // Sort keys for consistent comparison regardless of order
+  const keysA = Object.keys(objA).sort();
+  const keysB = Object.keys(objB).sort();
+  
+  // Find keys in A that are not in B (removed keys)
+  keysA.forEach(key => {
+    if (!keysB.includes(key)) {
+      diffs.push({
+        type: 'removed',
+        path: path ? `${path}.${key}` : key,
+        value: objA[key]
+      });
+    }
+  });
+  
+  // Find keys in B that are not in A (added keys)
+  keysB.forEach(key => {
+    if (!keysA.includes(key)) {
+      diffs.push({
+        type: 'added',
+        path: path ? `${path}.${key}` : key,
+        value: objB[key]
+      });
+    }
+  });
+  
+  // Compare values for keys that exist in both objects
+  keysA.filter(key => keysB.includes(key)).forEach(key => {
+    const newPath = path ? `${path}.${key}` : key;
+    
+    if (Array.isArray(objA[key]) && Array.isArray(objB[key])) {
+      // Handle arrays
+      if (JSON.stringify(objA[key]) !== JSON.stringify(objB[key])) {
+        // For arrays, compare them directly since order matters
+        diffs.push({
+          type: 'changed',
+          path: newPath,
+          oldValue: objA[key],
+          newValue: objB[key]
+        });
+      }
+    } else if (
+      typeof objA[key] === 'object' && objA[key] !== null &&
+      typeof objB[key] === 'object' && objB[key] !== null
+    ) {
+      // Recursively compare nested objects
+      findDifferences(objA[key], objB[key], newPath, diffs);
+    } else if (objA[key] !== objB[key]) {
+      // Compare primitive values
+      diffs.push({
+        type: 'changed',
+        path: newPath,
+        oldValue: objA[key],
+        newValue: objB[key]
+      });
+    }
+  });
+  
+  return diffs;
+}
+
+// Show JSON Compare dialog
+function showCompare() {
+  openModal('compareModal');
+}
+
+// Setup keyboard shortcuts
+function setupKeyboardShortcuts() {
+  document.addEventListener('keydown', (e) => {
+    // Check if Cmd key (Mac) or Ctrl key (Windows/Linux) is pressed
+    const isCmdOrCtrl = e.metaKey || e.ctrlKey;
+    
+    if (isCmdOrCtrl) {
+      switch (e.key) {
+        case 'n':
+          e.preventDefault();
+          newFile();
+          break;
+        case 'o':
+          e.preventDefault();
+          // Use Cmd+O for Open File only
+          openSingleFile();
+          break;
+        case 's':
+          e.preventDefault();
+          if (e.shiftKey) {
+            // Shift+Cmd+S for Save As
+            saveFileAs();
+          } else {
+            // Cmd+S for Save
+            saveFile();
+          }
+          break;
+        case 'e':
+          if (e.shiftKey) {
+            e.preventDefault();
+            exportToClipboard();
+          } else {
+            // Cmd+E to toggle file explorer
+            e.preventDefault();
+            toggleFileExplorer();
+          }
+          break;
+        case 'f':
+          e.preventDefault();
+          toggleSearch();
+          break;
+        case 't':
+          e.preventDefault();
+          toggleTreeView();
+          break;
+        case 'd':
+          if (e.shiftKey) {
+            e.preventDefault();
+            showCompare();
+          }
+          break;
+        case ']':
+          e.preventDefault();
+          expandAllNodes();
+          break;
+        case '[':
+          e.preventDefault();
+          collapseAllNodes();
+          break;
+        case 'i':
+          e.preventDefault();
+          if (e.shiftKey) {
+            // Import from clipboard
+            navigator.clipboard.readText().then(text => {
+              importFromClipboard(text);
+            }).catch(err => {
+              updateStatus('Failed to read clipboard: ' + err.message, 'error');
+            });
+          } else {
+            importFromUrl();
+          }
+          break;
+      }
+      
+      // Handle special cases with different characters
+      if (e.key === 'F' && e.shiftKey) {
+        e.preventDefault();
+        formatJSON();
+      } else if (e.key === 'C' && e.shiftKey) {
+        e.preventDefault();
+        compressJSON();
+      } else if (e.key === 'V' && e.shiftKey) {
+        e.preventDefault();
+        validateJSON(true);
+      } else if (e.key === 'K' && e.shiftKey) {
+        e.preventDefault();
+        showShortcuts();
+      }
+    }
+  });
+}
+
+// Toggle file explorer sidebar
+function toggleFileExplorer() {
+  const fileExplorer = document.getElementById('file-explorer');
+  
+  isFileExplorerVisible = !isFileExplorerVisible;
+  
+  if (isFileExplorerVisible) {
+    fileExplorer.classList.remove('hidden');
+    if (currentFolderPath) {
+      loadJsonFilesInSidebar(currentFolderPath);
+    }
+  } else {
+    fileExplorer.classList.add('hidden');
+  }
+}
+
+// Choose a folder for sidebar
+async function chooseFolderForSidebar() {
+  try {
+    const result = await window.electronAPI.openFolder();
+    if (result && !result.canceled && result.filePaths.length > 0) {
+      const folderPath = result.filePaths[0];
+      currentFolderPath = folderPath;
+      document.getElementById('sidebarFolderPath').textContent = `${folderPath}`;
+      
+      // Load JSON files from the folder into sidebar
+      loadJsonFilesInSidebar(folderPath);
+    }
+  } catch (err) {
+    updateStatus('Error selecting folder: ' + err.message, 'error');
+  }
+}
+
+// Load JSON files in sidebar
+async function loadJsonFilesInSidebar(folderPath) {
+  try {
+    const jsonFiles = await window.electronAPI.readFolder(folderPath);
+    const fileListContainer = document.getElementById('folderFileList');
+    
+    if (jsonFiles.length === 0) {
+      fileListContainer.innerHTML = '<div class="empty-folder-message">No JSON files found in this folder</div>';
+      return;
+    }
+    
+    fileListContainer.innerHTML = '';
+    
+    // Create list items for each JSON file
+    jsonFiles.forEach(file => {
+      const fileItem = document.createElement('div');
+      fileItem.className = 'file-list-item';
+      if (currentFilePath === file.path) {
+        fileItem.classList.add('active');
+        currentlyOpenedFile = fileItem;
+      }
+      fileItem.innerHTML = `<i class="fas fa-file-code"></i> ${file.name}`;
+      fileItem.dataset.path = file.path;
+      fileItem.addEventListener('click', () => openJsonFileFromSidebar(file.path, fileItem));
+      fileListContainer.appendChild(fileItem);
+    });
+    
+  } catch (err) {
+    updateStatus('Error loading files from folder: ' + err.message, 'error');
+  }
+}
+
+// Open a JSON file from the sidebar
+async function openJsonFileFromSidebar(filePath, fileItem) {
+  // Check for unsaved changes
+  if (hasUnsavedChanges) {
+    if (!confirm('You have unsaved changes. Are you sure you want to open another file?')) {
+      return;
+    }
+  }
+  
+  try {
+    const content = await window.electronAPI.readFile(filePath);
+    editor.setValue(content, -1);
+    currentFilePath = filePath;
+    updateFileInfo(filePath);
+    hasUnsavedChanges = false;
+    updateStatus('File loaded successfully', 'success');
+    
+    // Update active file in sidebar
+    if (currentlyOpenedFile) {
+      currentlyOpenedFile.classList.remove('active');
+    }
+    fileItem.classList.add('active');
+    currentlyOpenedFile = fileItem;
+  } catch (err) {
+    updateStatus('Error opening file: ' + err.message, 'error');
+  }
+}
+
+// Refresh current folder in sidebar
+async function refreshFolderInSidebar() {
+  if (currentFolderPath) {
+    await loadJsonFilesInSidebar(currentFolderPath);
+    updateStatus('Folder refreshed', 'success');
+  } else {
+    updateStatus('No folder selected', 'warning');
+  }
+}
+
+// Open a single file dialog
+async function openSingleFile() {
+  // Check for unsaved changes
+  if (hasUnsavedChanges) {
+    if (!confirm('You have unsaved changes. Are you sure you want to open another file?')) {
+      return;
+    }
+  }
+  
+  try {
+    const result = await window.electronAPI.openFile();
+    if (result && !result.canceled && result.filePaths.length > 0) {
+      const filePath = result.filePaths[0];
+      const content = await window.electronAPI.readFile(filePath);
+      editor.setValue(content, -1);
+      currentFilePath = filePath;
+      updateFileInfo(filePath);
+      hasUnsavedChanges = false;
+    }
+  } catch (err) {
+    updateStatus('Error opening file: ' + err.message, 'error');
+  }
+}
+
+// Add this function at an appropriate location, e.g., just before or after setupKeyboardShortcuts
+function setupBeforeUnloadWarning() {
+  window.addEventListener('beforeunload', (e) => {
+    if (hasUnsavedChanges) {
+      // Standard way to show a confirmation dialog before closing
+      e.preventDefault();
+      e.returnValue = '';
+      return '';
+    }
+  });
+}
+
+// Initialize the application
 document.addEventListener('DOMContentLoaded', () => {
   console.log('DOM loaded, initializing application...');
   
-  // Initialize the editor
-  setTimeout(initEditor, 100);
+  // Initialize editor
+  initEditor();
+  
+  // Initialize comparison modal
+  initCompareModal();
+  
+  // Set up resizable divider
+  initResizableDivider();
+  
+  // Set up keyboard shortcuts
+  setupKeyboardShortcuts();
+  
+  // Set up unsaved changes warning
+  setupBeforeUnloadWarning();
   
   // Initialize event listeners for buttons
   document.getElementById('btnNew').addEventListener('click', newFile);
-  document.getElementById('btnOpen').addEventListener('click', () => window.api.openFile());
+  document.getElementById('btnOpen').addEventListener('click', () => {
+    // Show file/folder option dialog
+    const openOptions = document.createElement('div');
+    openOptions.className = 'open-options-popup';
+    openOptions.innerHTML = `
+      <button id="btnOpenFile" class="btn">
+        <i class="fas fa-file"></i> Open File
+      </button>
+      <button id="btnExploreFiles" class="btn">
+        <i class="fas fa-list"></i> File Explorer
+      </button>
+    `;
+    
+    document.body.appendChild(openOptions);
+    
+    // Position the popup near the Open button
+    const openBtn = document.getElementById('btnOpen');
+    const rect = openBtn.getBoundingClientRect();
+    openOptions.style.top = `${rect.bottom + 5}px`;
+    openOptions.style.left = `${rect.left}px`;
+    
+    // Add event listeners
+    document.getElementById('btnOpenFile').addEventListener('click', () => {
+      document.body.removeChild(openOptions);
+      openSingleFile();
+    });
+    
+    document.getElementById('btnExploreFiles').addEventListener('click', () => {
+      document.body.removeChild(openOptions);
+      toggleFileExplorer();
+    });
+    
+    // Close the popup when clicking outside
+    const closePopup = (e) => {
+      if (!openOptions.contains(e.target) && e.target !== openBtn) {
+        document.body.removeChild(openOptions);
+        document.removeEventListener('mousedown', closePopup);
+      }
+    };
+    
+    document.addEventListener('mousedown', closePopup);
+  });
+  
   document.getElementById('btnSave').addEventListener('click', saveFile);
   document.getElementById('btnFormat').addEventListener('click', formatJSON);
   document.getElementById('btnCompress').addEventListener('click', compressJSON);
   document.getElementById('btnValidate').addEventListener('click', () => validateJSON(true));
   document.getElementById('btnTreeView').addEventListener('click', toggleTreeView);
   document.getElementById('btnFind').addEventListener('click', toggleSearch);
+  document.getElementById('btnCompare').addEventListener('click', showCompare);
   
   // Tree view controls
   document.getElementById('btnExpandAll').addEventListener('click', expandAllNodes);
@@ -993,9 +1604,6 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   });
-  
-  // Initialize the resizable divider
-  initResizableDivider();
   
   // Set up initial UI state - Tree view is hidden by default
   isTreeViewVisible = false;
@@ -1053,5 +1661,15 @@ document.addEventListener('DOMContentLoaded', () => {
     editor.setValue(data.content, -1);
     updateFileInfo(data.path);
     updateStatus('File loaded successfully', 'success');
+  });
+  
+  // Add event listener for the Choose Folder button
+  document.getElementById('btnChooseFolderSidebar').addEventListener('click', chooseFolderForSidebar);
+  document.getElementById('btnRefreshFolder').addEventListener('click', refreshFolderInSidebar);
+  document.getElementById('btnCloseSidebar').addEventListener('click', toggleFileExplorer);
+  
+  // Add handler for file explorer toggle menu action
+  window.api.receiveToggleFileExplorer(() => {
+    toggleFileExplorer();
   });
 }); 

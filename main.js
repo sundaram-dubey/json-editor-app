@@ -53,7 +53,7 @@ function createMenu() {
           click: () => mainWindow.webContents.send('menu-new')
         },
         {
-          label: 'Open',
+          label: 'Open File',
           accelerator: 'CmdOrCtrl+O',
           click: async () => {
             const { canceled, filePaths } = await dialog.showOpenDialog({
@@ -154,6 +154,11 @@ function createMenu() {
         { role: 'togglefullscreen' },
         { type: 'separator' },
         {
+          label: 'File Explorer',
+          accelerator: 'CmdOrCtrl+E',
+          click: () => mainWindow.webContents.send('toggle-file-explorer')
+        },
+        {
           label: 'Toggle Tree View',
           accelerator: 'CmdOrCtrl+T',
           click: () => mainWindow.webContents.send('toggle-tree-view')
@@ -249,16 +254,21 @@ function createMenu() {
 
 // Handle file save as
 ipcMain.handle('save-file-as', async (event, content) => {
-  const { canceled, filePath } = await dialog.showSaveDialog({
-    defaultPath: 'untitled.json',
-    filters: [{ name: 'JSON Files', extensions: ['json'] }]
-  });
-  
-  if (!canceled && filePath) {
-    fs.writeFileSync(filePath, content);
-    return filePath;
+  try {
+    const result = await dialog.showSaveDialog({
+      defaultPath: 'untitled.json',
+      filters: [{ name: 'JSON Files', extensions: ['json'] }]
+    });
+    
+    if (!result.canceled && result.filePath) {
+      fs.writeFileSync(result.filePath, content, 'utf8');
+    }
+    
+    return result; // Return the whole result object which includes filePath and canceled properties
+  } catch (error) {
+    console.error('Error saving file:', error);
+    throw error;
   }
-  return null;
 });
 
 // Handle file open request
@@ -320,6 +330,67 @@ function fetchUrl(url) {
     request.end();
   });
 }
+
+// Handle opening a file dialog
+ipcMain.handle('open-file-dialog', async () => {
+  try {
+    return await dialog.showOpenDialog({
+      properties: ['openFile'],
+      filters: [{ name: 'JSON Files', extensions: ['json'] }]
+    });
+  } catch (error) {
+    console.error('Error opening file dialog:', error);
+    throw error;
+  }
+});
+
+// Handle opening a folder dialog
+ipcMain.handle('open-folder-dialog', async () => {
+  try {
+    return await dialog.showOpenDialog({
+      properties: ['openDirectory']
+    });
+  } catch (error) {
+    console.error('Error opening folder dialog:', error);
+    throw error;
+  }
+});
+
+// Handle reading a folder's contents
+ipcMain.handle('read-folder', async (event, folderPath) => {
+  try {
+    const files = fs.readdirSync(folderPath);
+    const jsonFiles = files.filter(file => file.toLowerCase().endsWith('.json'));
+    return jsonFiles.map(file => ({
+      name: file,
+      path: path.join(folderPath, file)
+    }));
+  } catch (error) {
+    console.error('Error reading folder:', error);
+    throw error;
+  }
+});
+
+// Handle reading a file
+ipcMain.handle('read-file', async (event, filePath) => {
+  try {
+    return fs.readFileSync(filePath, 'utf8');
+  } catch (error) {
+    console.error('Error reading file:', error);
+    throw error;
+  }
+});
+
+// Handle saving a file
+ipcMain.handle('save-file', async (event, filePath, content) => {
+  try {
+    fs.writeFileSync(filePath, content, 'utf8');
+    return { success: true, path: filePath };
+  } catch (error) {
+    console.error('Error saving file:', error);
+    throw error;
+  }
+});
 
 // When Electron is ready
 app.whenReady().then(createWindow);

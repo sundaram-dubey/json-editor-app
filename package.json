@@ -33,7 +33,7 @@
   },
   "build": {
     "appId": "com.swiggy.jsoneditor",
-    "productName": "Swiggy JSON Editor",
+    "productName": "JSON Editor",
     "icon": "build/icons/icon.png",
     "mac": {
       "category": "public.app-category.developer-tools",

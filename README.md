@@ -1,11 +1,23 @@
-# JSON Editor
+# JSON Editor PRO
 
 A powerful desktop application for editing, validating, and analyzing JSON files with tree view, schema validation, and AI-powered features.
 
-<img width="1728" alt="Screenshot 2025-04-18 at 22 22 07" src="https://github.com/user-attachments/assets/38417a86-1112-4ed5-ab23-bf2afff363e8" />
-<img width="1722" alt="Screenshot 2025-04-18 at 22 21 59" src="https://github.com/user-attachments/assets/b6f5651a-b381-4e6d-a6b0-f1f797a447b8" />
-<img width="1728" alt="Screenshot 2025-04-18 at 22 21 50" src="https://github.com/user-attachments/assets/abddf08c-148d-4440-9663-adbea01be260" />
-<img width="1725" alt="Screenshot 2025-04-18 at 22 21 42" src="https://github.com/user-attachments/assets/968636cf-5c0c-4108-9bee-5909c3e06109" />
+<img width="1728" alt="Screenshot 2025-04-20 at 10 56 20" src="https://github.com/user-attachments/assets/f4fdc654-035c-4612-ac34-ac27b1dee17f" />
+<img width="1728" alt="Screenshot 2025-04-20 at 10 56 36" src="https://github.com/user-attachments/assets/de0cfc20-54d1-424d-80f8-f53475a0daf1" />
+<img width="1728" alt="Screenshot 2025-04-20 at 10 56 46" src="https://github.com/user-attachments/assets/f6caf202-6874-48fc-ae03-9605707330ae" />
+<img width="1728" alt="Screenshot 2025-04-20 at 10 57 31" src="https://github.com/user-attachments/assets/ed8d2221-217f-4ffd-9441-f98fce489579" />
+<img width="1728" alt="Screenshot 2025-04-20 at 10 58 52" src="https://github.com/user-attachments/assets/fc5ce66f-1543-419e-af7f-b8b72d30e10d" />
+
+
+
+### AI Feature
+<img width="1728" alt="Screenshot 2025-04-20 at 10 49 58" src="https://github.com/user-attachments/assets/9acb47e3-3bf7-4956-af20-f1dbce3f3054" />
+ <img width="1728" alt="Screenshot 2025-04-20 at 10 49 52" src="https://github.com/user-attachments/assets/79b27470-2d19-4edc-a977-fe4219d49c1d" />
+<img width="1728" alt="Screenshot 2025-04-20 at 10 49 35" src="https://github.com/user-attachments/assets/b3a70fed-54f5-4a99-a7de-8b8f49382b99" />
+<img width="1728" alt="Screenshot 2025-04-20 at 11 09 52" src="https://github.com/user-attachments/assets/bc6a61fe-7328-47fa-be30-1732061e5945" />
+<img width="1728" alt="Screenshot 2025-04-20 at 11 13 52" src="https://github.com/user-attachments/assets/c31583a3-c74d-427b-a1e4-1c202b0991ff" />
+
+
 
 ## Features
 
@@ -47,7 +59,6 @@ A powerful desktop application for editing, validating, and analyzing JSON files
 - **Save As**: Use Cmd+Shift+S (Mac) / Ctrl+Shift+S (Windows/Linux)
 
 #### Import/Export
-- **Import from URL**: Menu > File > Import from URL or Cmd+I
 - **Import from Clipboard**: Menu > File > Import from Clipboard or Cmd+Shift+I
 - **Export to Clipboard**: Menu > File > Export to Clipboard or Cmd+Shift+E
 
@@ -173,7 +184,6 @@ A powerful desktop application for editing, validating, and analyzing JSON files
 | Compare JSONs | Cmd+Shift+D | Ctrl+Shift+D |
 | Expand All | Cmd+] | Ctrl+] |
 | Collapse All | Cmd+[ | Ctrl+[ |
-| Import from URL | Cmd+I | Ctrl+I |
 | Import from Clipboard | Cmd+Shift+I | Ctrl+Shift+I |
 | Export to Clipboard | Cmd+Shift+E | Ctrl+Shift+E |
 | Toggle File Explorer | Cmd+E | Ctrl+E |

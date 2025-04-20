@@ -24,7 +24,7 @@ function createWindow() {
     titleBarStyle: 'hiddenInset', // For a more native macOS look
     backgroundColor: '#f5f5f5',
     // Add icon for the window
-    icon: path.join(__dirname, 'build/icons/icon.png')
+    icon: path.join(__dirname, process.platform === 'darwin' ? 'build/icons/icon.icns' : 'build/icons/icon.png')
   });
 
   // Load the main HTML file

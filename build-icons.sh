@@ -37,7 +37,11 @@ convert -background none -size 64x64 "$SVG_FILE" build/icons/64x64.png
 convert -background none -size 128x128 "$SVG_FILE" build/icons/128x128.png
 convert -background none -size 256x256 "$SVG_FILE" build/icons/256x256.png
 convert -background none -size 512x512 "$SVG_FILE" build/icons/512x512.png
-convert -background none -size 1024x1024 "$SVG_FILE" build/icons/icon.png
+convert -background none -size 1024x1024 "$SVG_FILE" build/icons/1024x1024.png
+
+# Create a main icon.png file at highest quality
+echo "Creating main icon.png file..."
+convert -background none -density 500 -size 1024x1024 "$SVG_FILE" build/icons/icon.png
 
 # Create macOS icns file
 echo "Creating macOS .icns file..."

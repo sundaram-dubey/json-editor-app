@@ -34,7 +34,7 @@
   "build": {
     "appId": "com.swiggy.jsoneditor",
     "productName": "JSON Editor",
-    "icon": "build/icons/icon.png",
+    "icon": "build/icons/icon.icns",
     "mac": {
       "category": "public.app-category.developer-tools",
       "target": [
@@ -42,7 +42,7 @@
         "zip"
       ],
       "darkModeSupport": true,
-      "icon": "build/icons/icon.png"
+      "icon": "build/icons/icon.icns"
     }
   }
 } 

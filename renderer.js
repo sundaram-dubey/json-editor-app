@@ -1860,6 +1860,10 @@ async function generateAiEnhancedSchema() {
   if (!editor) return;
   
   try {
+    // First, open the modal immediately with a loading message
+    document.getElementById('aiSchemaResults').textContent = 'Generating AI-enhanced schema... Please wait.';
+    openModal('aiSchemaModal');
+    
     const content = editor.getValue();
     const data = JSON.parse(content);
     
@@ -1886,7 +1890,10 @@ async function generateAiEnhancedSchema() {
       basicSchema.items = getTypeSchema(data[0]);
     }
     
-    // Now enhance the schema with AI
+    // Display the basic schema while we wait for the enhanced one
+    document.getElementById('aiSchemaResults').textContent = 'Basic schema generated. Enhancing with AI...\n\n' + 
+      JSON.stringify(basicSchema, null, 2);
+    
     updateStatus('Generating enhanced schema...', 'warning');
     
     // Call Gemini API to enhance the schema
@@ -1927,22 +1934,28 @@ async function generateAiEnhancedSchema() {
       updateStatus('Schema generated successfully', 'success');
       document.getElementById('schema-info').textContent = 'Schema: AI Enhanced';
       
-      // Show the schema
-      document.getElementById('schemaResults').textContent = JSON.stringify(currentSchema, null, 2);
-      openModal('schemaModal');
+      // Show the schema in the AI Schema Generator modal
+      document.getElementById('aiSchemaResults').textContent = JSON.stringify(currentSchema, null, 2);
     } catch (error) {
       // If parsing fails, fall back to the basic schema
       currentSchema = basicSchema;
       updateStatus('Enhanced schema parsing failed, using basic schema', 'warning');
       document.getElementById('schema-info').textContent = 'Schema: Basic (AI enhancement failed)';
       
-      // Show the basic schema
-      document.getElementById('schemaResults').textContent = JSON.stringify(basicSchema, null, 2);
-      openModal('schemaModal');
+      // Show the basic schema with error message
+      document.getElementById('aiSchemaResults').textContent = 
+        'Error processing AI-enhanced schema. Using basic schema instead:\n\n' + 
+        JSON.stringify(basicSchema, null, 2);
     }
     
   } catch (error) {
     updateStatus(`Error generating schema: ${error.message}`, 'error');
+    
+    // Show error in the modal
+    if (document.getElementById('aiSchemaModal').style.display === 'block') {
+      document.getElementById('aiSchemaResults').textContent = 
+        `Error generating schema: ${error.message}\n\nPlease check that your JSON is valid and try again.`;
+    }
   }
 }
 
@@ -3286,3 +3299,34 @@ function validateWithJsonSchema(data, schema) {
   validateSchema(data, schema);
   return result;
 }
+
+// Function to show snackbar notification
+function showSnackbar(message, icon = 'check-circle') {
+  const snackbar = document.getElementById('snackbar');
+  snackbar.innerHTML = `<i class="fas fa-${icon}"></i> ${message}`;
+  snackbar.className = 'show';
+  
+  // After 3 seconds, remove the show class
+  setTimeout(() => { 
+    snackbar.className = snackbar.className.replace('show', ''); 
+  }, 3000);
+}
+
+// Set up event listener for copying AI Schema to clipboard
+document.addEventListener('DOMContentLoaded', function() {
+  const copyAiSchemaBtn = document.getElementById('btnCopyAiSchema');
+  if (copyAiSchemaBtn) {
+    copyAiSchemaBtn.addEventListener('click', function() {
+      const schemaText = document.getElementById('aiSchemaResults').textContent;
+      navigator.clipboard.writeText(schemaText)
+        .then(() => {
+          updateStatus('Schema copied to clipboard', 'success');
+          showSnackbar('Schema copied to clipboard');
+        })
+        .catch(err => {
+          updateStatus(`Failed to copy: ${err}`, 'error');
+          showSnackbar('Failed to copy to clipboard', 'exclamation-circle');
+        });
+    });
+  }
+});

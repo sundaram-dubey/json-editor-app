@@ -223,6 +223,25 @@
     </div>
   </div>
 
+  <!-- AI Schema Generator Modal -->
+  <div id="aiSchemaModal" class="modal">
+    <div class="modal-content modal-content-large">
+      <div class="modal-header">
+        <h2><i class="fas fa-robot"></i> AI Schema Generator</h2>
+        <span class="close" data-modal="aiSchemaModal">&times;</span>
+      </div>
+      <div class="modal-body">
+        <div class="schema-actions">
+          <button id="btnCopyAiSchema" class="btn btn-sm">
+            <i class="fas fa-copy"></i> Copy to Clipboard
+          </button>
+        </div>
+        <pre id="aiSchemaResults"></pre>
+      </div>
+      <div class="resize-handle"></div>
+    </div>
+  </div>
+
   <!-- Keyboard Shortcuts Modal -->
   <div id="shortcutsModal" class="modal">
     <div class="modal-content">
@@ -499,6 +518,10 @@
   <script src="node_modules/ace-builds/src-min/theme-textmate.js"></script>
   <script src="node_modules/ace-builds/src-min/ext-language_tools.js"></script>
   <script src="node_modules/ace-builds/src-min/ext-searchbox.js"></script>
+  
+  <!-- Snackbar for notifications -->
+  <div id="snackbar"></div>
+  
   <script src="renderer.js"></script>
 </body>
 </html> 

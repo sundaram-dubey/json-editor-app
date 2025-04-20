@@ -403,7 +403,7 @@ body {
   justify-content: flex-end;
 }
 
-#validationResults, #schemaResults {
+#validationResults, #schemaResults, #aiSchemaResults {
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
   white-space: pre-wrap;
   padding: 12px;
@@ -1339,4 +1339,65 @@ body {
 
 .ai-result h3 + .search-result-label {
   margin-top: 15px;
+}
+
+.schema-actions {
+  margin-bottom: 10px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.schema-actions button {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* Snackbar styling */
+#snackbar {
+  visibility: hidden;
+  min-width: 250px;
+  background-color: var(--swiggy-orange);
+  color: white;
+  text-align: center;
+  border-radius: 8px;
+  padding: 12px;
+  position: fixed;
+  z-index: 2000;
+  left: 50%;
+  bottom: 30px;
+  transform: translateX(-50%);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+#snackbar.show {
+  visibility: visible;
+  animation: snackbar-fadein 0.3s, snackbar-fadeout 0.5s 2.5s;
+}
+
+@keyframes snackbar-fadein {
+  from {
+    bottom: 0;
+    opacity: 0;
+  }
+  to {
+    bottom: 30px;
+    opacity: 1;
+  }
+}
+
+@keyframes snackbar-fadeout {
+  from {
+    bottom: 30px;
+    opacity: 1;
+  }
+  to {
+    bottom: 0;
+    opacity: 0;
+  }
 } 

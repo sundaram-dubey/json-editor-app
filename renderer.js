@@ -1043,6 +1043,14 @@ function initCompareModal() {
   });
   compareEditorB.setValue('{\n  \n}', -1);
 
+  // Make compare results container scrollable
+  const compareResults = document.getElementById('compareResults');
+  if (compareResults) {
+    compareResults.style.maxHeight = '400px';
+    compareResults.style.overflowY = 'auto';
+    compareResults.style.overflowX = 'hidden';
+  }
+
   // Set up event handlers for comparison buttons
   document.getElementById('btnUseCurrentJsonA').addEventListener('click', () => {
     compareEditorA.setValue(editor.getValue(), -1);

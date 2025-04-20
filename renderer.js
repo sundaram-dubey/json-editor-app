@@ -2232,8 +2232,14 @@ document.addEventListener('DOMContentLoaded', () => {
   // Initialize comparison modal
   initCompareModal();
   
+  // Initialize schema validation modal
+  initSchemaValidationModal();
+  
   // Set up resizable divider
   initResizableDivider();
+  
+  // Add CSS styles for schema validation modal
+  addSchemaValidationStyles();
   
   // Set up keyboard shortcuts
   setupKeyboardShortcuts();
@@ -2289,7 +2295,11 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btnSave').addEventListener('click', saveFile);
   document.getElementById('btnFormat').addEventListener('click', formatJSON);
   document.getElementById('btnCompress').addEventListener('click', compressJSON);
-  document.getElementById('btnValidate').addEventListener('click', () => validateJSON(true));
+  document.getElementById('btnValidate').addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    showValidateOptions(event);
+  });
   document.getElementById('btnTreeView').addEventListener('click', toggleTreeView);
   document.getElementById('btnFind').addEventListener('click', toggleSearch);
   document.getElementById('btnCompare').addEventListener('click', showCompare);
@@ -2323,6 +2333,11 @@ document.addEventListener('DOMContentLoaded', () => {
   // Close modals when clicking outside
   window.addEventListener('click', (event) => {
     document.querySelectorAll('.modal').forEach(modal => {
+      // Skip compareModal and schemaValidationModal - these should only close with the X button
+      if (modal.id === 'compareModal' || modal.id === 'schemaValidationModal') {
+        return;
+      }
+      
       if (event.target === modal) {
         modal.style.display = 'none';
       }
@@ -2339,6 +2354,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // Escape key closes modals and search
     if (event.key === 'Escape') {
       document.querySelectorAll('.modal').forEach(modal => {
+        // Skip compareModal and schemaValidationModal - these should only close with the X button
+        if (modal.id === 'compareModal' || modal.id === 'schemaValidationModal') {
+          return;
+        }
+        
         modal.style.display = 'none';
       });
       
@@ -2445,3 +2465,824 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('editorFontSize').value = savedFontSize;
   }
 }); 
+
+// Initialize schema validation modal
+function initSchemaValidationModal() {
+  // Create modal HTML dynamically if it doesn't exist
+  if (!document.getElementById('schemaValidationModal')) {
+    const modal = document.createElement('div');
+    modal.id = 'schemaValidationModal';
+    modal.className = 'modal';
+    
+    modal.innerHTML = `
+      <div class="modal-content modal-content-large">
+        <div class="modal-header">
+          <h2><i class="fas fa-file-code"></i> Schema Validation</h2>
+          <span class="close" data-modal="schemaValidationModal">&times;</span>
+        </div>
+        <div class="modal-body">
+          <div class="schema-validation-container">
+            <div class="schema-json-editors">
+              <div class="schema-editor-container">
+                <div class="panel-header">
+                  <span>Schema (JSON Schema)</span>
+                  <button id="btnCopySchema" class="btn-sm">
+                    <i class="fas fa-copy"></i> Copy
+                  </button>
+                  <button id="btnPasteSchema" class="btn-sm">
+                    <i class="fas fa-paste"></i> Paste
+                  </button>
+                </div>
+                <div id="schemaValidationEditor" class="editor"></div>
+              </div>
+              <div class="schema-editors-resizer"></div>
+              <div class="schema-editor-container">
+                <div class="panel-header">
+                  <span>JSON Data</span>
+                  <button id="btnCopyJson" class="btn-sm">
+                    <i class="fas fa-copy"></i> Copy
+                  </button>
+                  <button id="btnPasteJson" class="btn-sm">
+                    <i class="fas fa-paste"></i> Paste
+                  </button>
+                  <button id="btnUseCurrentJson" class="btn-sm">
+                    <i class="fas fa-file-import"></i> Use Current
+                  </button>
+                </div>
+                <div id="jsonValidationEditor" class="editor"></div>
+              </div>
+            </div>
+            <div class="schema-results-resizer"></div>
+            <div class="validation-results-container">
+              <div class="panel-header">
+                <span>Validation Results</span>
+                <button id="btnCopyResults" class="btn-sm">
+                  <i class="fas fa-copy"></i> Copy
+                </button>
+                <button id="btnValidateSchema" class="btn primary-btn">
+                  <i class="fas fa-check-circle"></i> Validate
+                </button>
+              </div>
+              <div id="schemaValidationResults" class="validation-results"></div>
+            </div>
+          </div>
+        </div>
+        <div class="resize-handle"></div>
+      </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // Add event listeners for the close button
+    modal.querySelector('.close').addEventListener('click', () => {
+      closeModal('schemaValidationModal');
+    });
+  }
+  
+  // Initialize the editors
+  const schemaEditor = ace.edit('schemaValidationEditor');
+  schemaEditor.setTheme('ace/theme/textmate');
+  schemaEditor.session.setMode('ace/mode/json');
+  schemaEditor.setOptions({
+    enableBasicAutocompletion: true,
+    enableLiveAutocompletion: true,
+    showPrintMargin: false,
+    fontSize: '14px',
+    tabSize: 2
+  });
+  schemaEditor.setValue('{\n  "$schema": "http://json-schema.org/draft-07/schema#",\n  "type": "object"\n}', -1);
+
+  const jsonEditor = ace.edit('jsonValidationEditor');
+  jsonEditor.setTheme('ace/theme/textmate');
+  jsonEditor.session.setMode('ace/mode/json');
+  jsonEditor.setOptions({
+    enableBasicAutocompletion: true,
+    enableLiveAutocompletion: true,
+    showPrintMargin: false,
+    fontSize: '14px',
+    tabSize: 2
+  });
+  jsonEditor.setValue('{\n  \n}', -1);
+
+  // Set up button event handlers
+  document.getElementById('btnCopySchema').addEventListener('click', () => {
+    navigator.clipboard.writeText(schemaEditor.getValue());
+    updateStatus('Schema copied to clipboard', 'success');
+  });
+  
+  document.getElementById('btnPasteSchema').addEventListener('click', async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      schemaEditor.setValue(text, -1);
+    } catch (err) {
+      updateStatus('Failed to read clipboard: ' + err.message, 'error');
+    }
+  });
+  
+  document.getElementById('btnCopyJson').addEventListener('click', () => {
+    navigator.clipboard.writeText(jsonEditor.getValue());
+    updateStatus('JSON copied to clipboard', 'success');
+  });
+  
+  document.getElementById('btnPasteJson').addEventListener('click', async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      jsonEditor.setValue(text, -1);
+    } catch (err) {
+      updateStatus('Failed to read clipboard: ' + err.message, 'error');
+    }
+  });
+  
+  document.getElementById('btnUseCurrentJson').addEventListener('click', () => {
+    jsonEditor.setValue(editor.getValue(), -1);
+  });
+  
+  document.getElementById('btnCopyResults').addEventListener('click', () => {
+    const resultsText = document.getElementById('schemaValidationResults').textContent;
+    navigator.clipboard.writeText(resultsText);
+    updateStatus('Results copied to clipboard', 'success');
+  });
+  
+  document.getElementById('btnValidateSchema').addEventListener('click', () => {
+    validateJsonWithSchema(schemaEditor.getValue(), jsonEditor.getValue());
+  });
+  
+  // Setup resizable functionality
+  setupSchemaValidationResizing();
+}
+
+// Setup resizable functionality for the schema validation modal
+function setupSchemaValidationResizing() {
+  // Horizontal resize between schema and JSON editors
+  const editorsResizer = document.querySelector('.schema-editors-resizer');
+  const schemaEditors = document.querySelector('.schema-json-editors');
+  
+  if (!editorsResizer || !schemaEditors) return;
+  
+  const schemaEditorLeft = schemaEditors.querySelector('.schema-editor-container:first-child');
+  const schemaEditorRight = schemaEditors.querySelector('.schema-editor-container:last-child');
+  
+  let isResizingEditors = false;
+  let startX, startLeftWidth, startRightWidth;
+  
+  editorsResizer.addEventListener('mousedown', (e) => {
+    isResizingEditors = true;
+    startX = e.clientX;
+    
+    const leftRect = schemaEditorLeft.getBoundingClientRect();
+    const rightRect = schemaEditorRight.getBoundingClientRect();
+    startLeftWidth = leftRect.width;
+    startRightWidth = rightRect.width;
+    
+    document.body.classList.add('resizing');
+    e.preventDefault();
+  });
+  
+  // Vertical resize for results panel
+  const resultsResizer = document.querySelector('.schema-results-resizer');
+  const resultsContainer = document.querySelector('.validation-results-container');
+  
+  if (resultsResizer && resultsContainer) {
+    const jsonEditors = document.querySelector('.schema-json-editors');
+    
+    let isResizingResults = false;
+    let startY, startResultsHeight, startEditorsHeight;
+    
+    resultsResizer.addEventListener('mousedown', (e) => {
+      isResizingResults = true;
+      startY = e.clientY;
+      
+      const resultsRect = resultsContainer.getBoundingClientRect();
+      const editorsRect = jsonEditors.getBoundingClientRect();
+      startResultsHeight = resultsRect.height;
+      startEditorsHeight = editorsRect.height;
+      
+      document.body.classList.add('resizing');
+      e.preventDefault();
+    });
+  }
+  
+  // Mouse move handler for both resizers
+  document.addEventListener('mousemove', (e) => {
+    if (isResizingEditors) {
+      const deltaX = e.clientX - startX;
+      const totalWidth = startLeftWidth + startRightWidth;
+      
+      // Calculate new widths ensuring minimum size
+      let newLeftWidth = startLeftWidth + deltaX;
+      let newRightWidth = startRightWidth - deltaX;
+      
+      // Ensure minimum width of 20% for each panel
+      const minWidth = totalWidth * 0.2;
+      if (newLeftWidth < minWidth) {
+        newLeftWidth = minWidth;
+        newRightWidth = totalWidth - minWidth;
+      } else if (newRightWidth < minWidth) {
+        newRightWidth = minWidth;
+        newLeftWidth = totalWidth - minWidth;
+      }
+      
+      // Apply new widths as percentages
+      const leftPercentage = (newLeftWidth / totalWidth) * 100;
+      const rightPercentage = (newRightWidth / totalWidth) * 100;
+      
+      schemaEditorLeft.style.flex = `0 0 ${leftPercentage}%`;
+      schemaEditorRight.style.flex = `0 0 ${rightPercentage}%`;
+      
+      // Resize editors
+      resizeAceEditors();
+    }
+    
+    if (typeof isResizingResults !== 'undefined' && isResizingResults) {
+      const resultsResizer = document.querySelector('.schema-results-resizer');
+      const resultsContainer = document.querySelector('.validation-results-container');
+      const jsonEditors = document.querySelector('.schema-json-editors');
+      
+      if (resultsResizer && resultsContainer && jsonEditors) {
+        const deltaY = startY - e.clientY;
+        const newResultsHeight = Math.max(100, startResultsHeight + deltaY);
+        
+        // Set new height for results container
+        resultsContainer.style.height = `${newResultsHeight}px`;
+        
+        // Resize editors
+        resizeAceEditors();
+      }
+    }
+  });
+  
+  // Mouse up handler to stop resizing
+  document.addEventListener('mouseup', () => {
+    if (isResizingEditors) {
+      isResizingEditors = false;
+      document.body.classList.remove('resizing');
+    }
+    
+    if (typeof isResizingResults !== 'undefined' && isResizingResults) {
+      isResizingResults = false;
+      document.body.classList.remove('resizing');
+    }
+  });
+  
+  // Handle modal resize to update editors
+  const modalContent = document.querySelector('#schemaValidationModal .modal-content');
+  if (modalContent) {
+    modalContent.addEventListener('mouseup', () => {
+      // Small delay to ensure the resize has completed
+      setTimeout(resizeAceEditors, 100);
+    });
+    
+    // Set up resize observer if supported
+    if (window.ResizeObserver) {
+      const resizeObserver = new ResizeObserver(() => {
+        resizeAceEditors();
+      });
+      resizeObserver.observe(modalContent);
+    }
+  }
+}
+
+// Resize ACE editors when the container size changes
+function resizeAceEditors() {
+  const schemaEditor = ace.edit('schemaValidationEditor');
+  const jsonEditor = ace.edit('jsonValidationEditor');
+  
+  if (schemaEditor && jsonEditor) {
+    schemaEditor.resize();
+    jsonEditor.resize();
+  }
+}
+
+// Show schema validation modal with improved resizing
+function showSchemaValidationModal() {
+  openModal('schemaValidationModal');
+  
+  // Resize editors immediately and after a short delay for DOM rendering
+  resizeAceEditors();
+  setTimeout(resizeAceEditors, 100);
+}
+
+// ... existing code ...
+
+// Show validation options dropdown
+function showValidateOptions(event) {
+  // Remove any existing validation options popup
+  const existingPopup = document.querySelector('.validate-options-popup');
+  if (existingPopup) {
+    document.body.removeChild(existingPopup);
+    return;
+  }
+  
+  // Create popup element
+  const validateOptions = document.createElement('div');
+  validateOptions.className = 'validate-options-popup';
+  validateOptions.innerHTML = `
+    <button id="btnSimpleValidate" class="btn">
+      <i class="fas fa-check-circle"></i> Validate JSON
+    </button>
+    <button id="btnSchemaValidate" class="btn">
+      <i class="fas fa-file-check"></i> Schema Validation
+    </button>
+  `;
+  
+  document.body.appendChild(validateOptions);
+  
+  // Position the popup near the Validate button
+  const validateBtn = event.currentTarget;
+  const rect = validateBtn.getBoundingClientRect();
+  validateOptions.style.top = `${rect.bottom + 5}px`;
+  validateOptions.style.left = `${rect.left}px`;
+  
+  // Add event listeners
+  document.getElementById('btnSimpleValidate').addEventListener('click', () => {
+    document.body.removeChild(validateOptions);
+    validateJSON(true);
+  });
+  
+  document.getElementById('btnSchemaValidate').addEventListener('click', () => {
+    document.body.removeChild(validateOptions);
+    showSchemaValidationModal();
+  });
+  
+  // Close the popup when clicking outside
+  const closePopup = (e) => {
+    if (!validateOptions.contains(e.target) && e.target !== validateBtn) {
+      document.body.removeChild(validateOptions);
+      document.removeEventListener('mousedown', closePopup);
+    }
+  };
+  
+  document.addEventListener('mousedown', closePopup);
+}
+
+// Add CSS styles for the schema validation modal
+function addSchemaValidationStyles() {
+  const styleEl = document.createElement('style');
+  styleEl.textContent = `
+    .schema-validation-container {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      flex: 1 1 auto;
+    }
+    
+    .schema-json-editors {
+      display: flex;
+      flex: 1 1 auto;
+      gap: 10px;
+      margin-bottom: 10px;
+      min-height: 250px;
+      overflow: hidden;
+    }
+    
+    .schema-editor-container {
+      flex: 1 1 50%;
+      display: flex;
+      flex-direction: column;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .panel-header {
+      display: flex;
+      align-items: center;
+      padding: 5px 10px;
+      background-color: #f5f5f5;
+      border-bottom: 1px solid #ccc;
+      flex: 0 0 auto;
+    }
+    
+    .panel-header span {
+      flex: 1;
+      font-weight: bold;
+    }
+    
+    .panel-header button {
+      margin-left: 5px;
+    }
+    
+    #schemaValidationEditor, #jsonValidationEditor {
+      flex: 1 1 auto;
+      height: 100%;
+      min-height: 100px;
+      width: 100%;
+    }
+    
+    .validation-results-container {
+      flex: 1;
+      min-height: 200px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      overflow: hidden;
+    }
+    
+    #schemaValidationResults {
+      flex: 1 1 auto;
+      padding: 0;
+      overflow-y: auto;
+      background-color: #f9f9f9;
+      height: calc(100% - 40px);
+    }
+    
+    .validation-error-item {
+      margin: 0;
+      padding: 10px 15px;
+      border-bottom: 1px solid #eee;
+      background-color: #fff;
+    }
+    
+    .error-path {
+      font-weight: bold;
+      margin-bottom: 3px;
+      display: block;
+      padding-left: 10px;
+      border-left: 3px solid #dc3545;
+    }
+    
+    .error-message {
+      padding-left: 13px;
+      font-size: 0.9em;
+      color: #555;
+    }
+    
+    .validation-error-header {
+      background-color: #f8d7da;
+      color: #721c24;
+      padding: 12px 15px;
+      border-bottom: 1px solid #f5c6cb;
+      font-weight: bold;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    
+    .validation-error-header .error-icon {
+      color: #dc3545;
+      font-size: 1.2em;
+    }
+    
+    .validation-success {
+      background-color: #d4edda;
+      color: #155724;
+      padding: 15px;
+      border-radius: 4px;
+      margin-bottom: 15px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    
+    .validate-options-popup {
+      position: absolute;
+      background-color: white;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      z-index: 1000;
+      display: flex;
+      flex-direction: column;
+      min-width: 150px;
+    }
+    
+    .validate-options-popup button {
+      padding: 8px 10px;
+      text-align: left;
+      border: none;
+      background: none;
+      cursor: pointer;
+    }
+    
+    .validate-options-popup button:hover {
+      background-color: #f5f5f5;
+    }
+    
+    /* Resizable handles */
+    .schema-results-resizer {
+      position: absolute;
+      height: 5px;
+      width: 100%;
+      background-color: transparent;
+      cursor: ns-resize;
+      top: -3px;
+      left: 0;
+      z-index: 10;
+    }
+    
+    .schema-editors-resizer {
+      position: absolute;
+      width: 5px;
+      height: 100%;
+      background-color: transparent;
+      cursor: ew-resize;
+      top: 0;
+      left: 50%;
+      z-index: 10;
+    }
+    
+    .resizing {
+      user-select: none;
+    }
+  `;
+  document.head.appendChild(styleEl);
+}
+
+// Validate JSON data against a JSON Schema
+function validateJsonWithSchema(schemaText, jsonText) {
+  const resultsContainer = document.getElementById('schemaValidationResults');
+  resultsContainer.innerHTML = '';
+  
+  try {
+    // Parse the schema and JSON
+    let schema, jsonData;
+    
+    try {
+      schema = JSON.parse(schemaText);
+    } catch (err) {
+      resultsContainer.innerHTML = '<div class="validation-error-header"><span class="error-icon">❌</span>Error parsing schema: ' + err.message + '</div>';
+      return;
+    }
+    
+    try {
+      jsonData = JSON.parse(jsonText);
+    } catch (err) {
+      resultsContainer.innerHTML = '<div class="validation-error-header"><span class="error-icon">❌</span>Error parsing JSON: ' + err.message + '</div>';
+      return;
+    }
+    
+    // Perform the validation
+    const validationResult = validateWithJsonSchema(jsonData, schema);
+    
+    if (validationResult.valid) {
+      resultsContainer.innerHTML = '<div class="validation-success"><span>✅</span> Validation successful! The JSON data is valid according to the schema.</div>';
+    } else {
+      // Format and display the errors
+      resultsContainer.innerHTML = '<div class="validation-error-header"><span class="error-icon">❌</span>Validation failed with the following errors:</div>';
+      
+      validationResult.errors.forEach(error => {
+        const errorItem = document.createElement('div');
+        errorItem.className = 'validation-error-item';
+        
+        const errorPath = document.createElement('div');
+        errorPath.className = 'error-path';
+        errorPath.textContent = `Path: ${error.path}`;
+        
+        const errorMessage = document.createElement('div');
+        errorMessage.className = 'error-message';
+        errorMessage.textContent = error.message;
+        
+        errorItem.appendChild(errorPath);
+        errorItem.appendChild(errorMessage);
+        resultsContainer.appendChild(errorItem);
+      });
+    }
+  } catch (error) {
+    resultsContainer.innerHTML = '<div class="validation-error-header"><span class="error-icon">❌</span>Error during validation: ' + error.message + '</div>';
+  }
+}
+
+// Comprehensive JSON Schema validation
+function validateWithJsonSchema(data, schema) {
+  const result = { valid: true, errors: [] };
+  
+  // Helper function to collect errors
+  function addError(path, message) {
+    result.valid = false;
+    result.errors.push({ path, message });
+  }
+  
+  // Check type
+  function validateType(data, schema, path) {
+    const dataType = getJsonType(data);
+    
+    if (schema.type) {
+      // Handle array of types
+      const types = Array.isArray(schema.type) ? schema.type : [schema.type];
+      
+      if (!types.includes(dataType) && 
+          !(types.includes('integer') && dataType === 'number' && Number.isInteger(data))) {
+        addError(path, `Expected type ${types.join(' or ')}, got ${dataType}`);
+        return false;
+      }
+    }
+    return true;
+  }
+  
+  // Get JSON type
+  function getJsonType(value) {
+    if (value === null) return 'null';
+    if (Array.isArray(value)) return 'array';
+    if (typeof value === 'number') return Number.isInteger(value) ? 'integer' : 'number';
+    return typeof value;
+  }
+  
+  // Validate required properties
+  function validateRequired(data, schema, path) {
+    if (schema.required && typeof data === 'object' && !Array.isArray(data)) {
+      schema.required.forEach(prop => {
+        if (data[prop] === undefined) {
+          addError(`${path}${path ? '.' : ''}${prop}`, `Required property '${prop}' is missing`);
+        }
+      });
+    }
+  }
+  
+  // Validate properties
+  function validateProperties(data, schema, path) {
+    if (schema.properties && typeof data === 'object' && !Array.isArray(data)) {
+      for (const prop in data) {
+        const propPath = `${path}${path ? '.' : ''}${prop}`;
+        
+        if (schema.properties[prop]) {
+          validateSchema(data[prop], schema.properties[prop], propPath);
+        } else if (schema.additionalProperties === false) {
+          addError(propPath, `Additional property '${prop}' is not allowed`);
+        } else if (typeof schema.additionalProperties === 'object') {
+          validateSchema(data[prop], schema.additionalProperties, propPath);
+        }
+      }
+    }
+  }
+  
+  // Validate array items
+  function validateItems(data, schema, path) {
+    if (Array.isArray(data) && schema.items) {
+      if (Array.isArray(schema.items)) {
+        // Tuple validation
+        const minItems = Math.min(data.length, schema.items.length);
+        for (let i = 0; i < minItems; i++) {
+          validateSchema(data[i], schema.items[i], `${path}[${i}]`);
+        }
+        
+        // Validate additional items
+        if (data.length > schema.items.length) {
+          if (schema.additionalItems === false) {
+            addError(path, `Array has more items than allowed`);
+          } else if (typeof schema.additionalItems === 'object') {
+            for (let i = schema.items.length; i < data.length; i++) {
+              validateSchema(data[i], schema.additionalItems, `${path}[${i}]`);
+            }
+          }
+        }
+      } else {
+        // Each item must validate against the same schema
+        for (let i = 0; i < data.length; i++) {
+          validateSchema(data[i], schema.items, `${path}[${i}]`);
+        }
+      }
+    }
+  }
+  
+  // Validate minItems and maxItems
+  function validateArrayLength(data, schema, path) {
+    if (Array.isArray(data)) {
+      if (schema.minItems !== undefined && data.length < schema.minItems) {
+        addError(path, `Array must have at least ${schema.minItems} items`);
+      }
+      
+      if (schema.maxItems !== undefined && data.length > schema.maxItems) {
+        addError(path, `Array must have at most ${schema.maxItems} items`);
+      }
+    }
+  }
+  
+  // Validate string length
+  function validateStringLength(data, schema, path) {
+    if (typeof data === 'string') {
+      if (schema.minLength !== undefined && data.length < schema.minLength) {
+        addError(path, `String must be at least ${schema.minLength} characters long`);
+      }
+      
+      if (schema.maxLength !== undefined && data.length > schema.maxLength) {
+        addError(path, `String must be at most ${schema.maxLength} characters long`);
+      }
+      
+      if (schema.pattern) {
+        const regex = new RegExp(schema.pattern);
+        if (!regex.test(data)) {
+          addError(path, `String must match pattern: ${schema.pattern}`);
+        }
+      }
+    }
+  }
+  
+  // Validate numeric constraints
+  function validateNumericConstraints(data, schema, path) {
+    if (typeof data === 'number') {
+      if (schema.minimum !== undefined) {
+        if ((schema.exclusiveMinimum === true && data <= schema.minimum) ||
+            (schema.exclusiveMinimum !== true && data < schema.minimum)) {
+          addError(path, `Value must be ${schema.exclusiveMinimum ? 'greater than' : 'greater than or equal to'} ${schema.minimum}`);
+        }
+      }
+      
+      if (schema.maximum !== undefined) {
+        if ((schema.exclusiveMaximum === true && data >= schema.maximum) ||
+            (schema.exclusiveMaximum !== true && data > schema.maximum)) {
+          addError(path, `Value must be ${schema.exclusiveMaximum ? 'less than' : 'less than or equal to'} ${schema.maximum}`);
+        }
+      }
+      
+      if (schema.multipleOf !== undefined) {
+        const remainder = data % schema.multipleOf;
+        if (remainder !== 0 && Math.abs(remainder - schema.multipleOf) > 1e-10) {
+          addError(path, `Value must be a multiple of ${schema.multipleOf}`);
+        }
+      }
+    }
+  }
+  
+  // Validate enum
+  function validateEnum(data, schema, path) {
+    if (schema.enum !== undefined) {
+      let found = false;
+      for (const val of schema.enum) {
+        if (JSON.stringify(data) === JSON.stringify(val)) {
+          found = true;
+          break;
+        }
+      }
+      
+      if (!found) {
+        addError(path, `Value must be one of the enumerated values`);
+      }
+    }
+  }
+  
+  // Main validation function
+  function validateSchema(data, schema, path = '') {
+    // Skip validation if data is undefined and the property is not required
+    if (data === undefined) return;
+    
+    // Check type first
+    if (!validateType(data, schema, path)) return;
+    
+    // Validate according to the data type
+    validateRequired(data, schema, path);
+    validateProperties(data, schema, path);
+    validateItems(data, schema, path);
+    validateArrayLength(data, schema, path);
+    validateStringLength(data, schema, path);
+    validateNumericConstraints(data, schema, path);
+    validateEnum(data, schema, path);
+    
+    // Handle format if present (common formats like date, email, etc.)
+    if (schema.format && typeof data === 'string') {
+      switch(schema.format) {
+        case 'email':
+          if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data)) {
+            addError(path, `Must be a valid email address`);
+          }
+          break;
+        case 'uri':
+        case 'url':
+          try {
+            new URL(data);
+          } catch (e) {
+            addError(path, `Must be a valid URL`);
+          }
+          break;
+        case 'date':
+          const dateVal = new Date(data);
+          if (isNaN(dateVal.getTime())) {
+            addError(path, `Must be a valid date`);
+          }
+          break;
+        case 'date-time':
+          const dateTimeVal = new Date(data);
+          if (isNaN(dateTimeVal.getTime())) {
+            addError(path, `Must be a valid date-time`);
+          }
+          break;
+        // Add more formats as needed
+      }
+    }
+    
+    // Handle uniqueItems for arrays
+    if (Array.isArray(data) && schema.uniqueItems === true) {
+      const uniqueItems = new Set();
+      const duplicates = [];
+      
+      for (let i = 0; i < data.length; i++) {
+        const item = JSON.stringify(data[i]);
+        if (uniqueItems.has(item)) {
+          duplicates.push(i);
+        } else {
+          uniqueItems.add(item);
+        }
+      }
+      
+      if (duplicates.length > 0) {
+        addError(path, `Array items must be unique (duplicates at positions: ${duplicates.join(', ')})`);
+      }
+    }
+  }
+  
+  // Start validation from root
+  validateSchema(data, schema);
+  return result;
+}

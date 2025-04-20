@@ -412,6 +412,8 @@ body {
   overflow: auto;
   color: var(--swiggy-gray-dark);
   border: 1px solid var(--swiggy-gray-light);
+  max-height: 60vh;
+  min-height: 300px;
 }
 
 /* Keyboard shortcuts table */
